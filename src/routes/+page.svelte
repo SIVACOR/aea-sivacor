@@ -2,7 +2,7 @@
     import { user } from '../lib/stores';
     import { logout } from '../lib/api';
     import LoginForm from '../lib/LoginForm.svelte';
-    import JobRunner from '../lib/JobRunner.svelte';
+    import JobMonitor from '../lib/JobMonitor.svelte';
 
     // A reactive statement to determine if the user is logged in
     $: isAuthenticated = $user !== null;
@@ -15,7 +15,7 @@
     {#if isAuthenticated}
         <h2>Hello {$user.firstName} {$user.lastName}</h2>
         <button on:click={logout}>Logout</button>
-        <JobRunner />
+        <JobMonitor />
     {:else}
         <LoginForm />
     {/if}

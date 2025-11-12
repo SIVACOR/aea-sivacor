@@ -4,6 +4,7 @@ import Cookies from 'js-cookie'; // You'll need to install 'js-cookie' (npm inst
 
 // Replace with your actual base URL
 const BASE_URL = 'https://girder.local.xarthisius.xyz/api/v1';
+export const JOB_POLLING_INTERVAL = 5000; // 5 seconds
 
 /**
  * Fetches the list of OAuth providers.
@@ -213,4 +214,30 @@ export async function submitJob(fileId, dropdownValue) {
     });
 
     return response;
+}
+
+/**
+ * Fetches the details of a specific job.
+ * @param {string} jobId - The ID of the job to fetch.
+ * @returns {Promise<{_id: string, status: number, created: string, ...}>} The job object.
+ */
+export async function fetchJobDetails(jobId) {
+    if (!jobId) {
+        throw new Error("Job ID must be provided.");
+    }
+    return await api(`/job/${jobId}`);
+}
+
+/**
+ * Cancels a running job.
+ * @param {string} jobId - The ID of the job to cancel.
+ * @returns {Promise<any>} The response object from the cancellation endpoint.
+ */
+export async function cancelJob(jobId) {
+    if (!jobId) {
+        throw new Error("Job ID must be provided.");
+    }
+    return await api(`/job/${jobId}/cancel`, {
+        method: 'PUT'
+    });
 }

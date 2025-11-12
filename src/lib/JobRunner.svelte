@@ -1,5 +1,6 @@
 <script>
     import { onMount } from 'svelte';
+    import { createEventDispatcher } from 'svelte';
     import { submitJob, getImages } from './api';
     import FileUploader from './FileUploader.svelte';
 
@@ -17,6 +18,8 @@
     let jobStatusMessage = '';
     let jobErrorMessage = null;
     let jobId = null;
+
+    const dispatch = createEventDispatcher(); // <-- Initialize
 
     onMount(async () => {
         try {
@@ -55,8 +58,9 @@
 
         try {
             const jobResponse = await submitJob(uploadedFileId, selectedOption);
-            jobId = jobResponse.id || 'N/A'; // Assuming the response contains a job ID
+            jobId = jobResponse._id || 'N/A'; // Assuming the response contains a job ID
             jobStatusMessage = `Job successfully started! Job ID: ${jobId}`;
+            dispatch('jobsubmitted', { jobId: jobId });
         } catch (error) {
             console.error('Job submission failed:', error);
             jobErrorMessage = 'Failed to submit job. Check console for details.';
