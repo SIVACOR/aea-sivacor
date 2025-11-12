@@ -1,10 +1,12 @@
 <script>
-    import { submitJob } from './api';
-    import FileUploader from './FileUploader.svelte'; // Assuming you refactor FileUploader to emit an ID
+    import { onMount } from 'svelte';
+    import { submitJob, getImages } from './api';
+    import FileUploader from './FileUploader.svelte';
 
     // State for the dropdown
-    let selectedOption = 'image1';
-    const options = ['image1', 'image2'];
+    let selectedOption = null;
+    let options = [];
+    let optionsLoading = true;
 
     // State for the file upload (will hold the ID when upload is done)
     /** @type {string | null} */
@@ -16,6 +18,20 @@
     let jobErrorMessage = null;
     let jobId = null;
 
+    onMount(async () => {
+        try {
+            options = await getImages();
+            if (options.length > 0) {
+                selectedOption = options[0];
+            }
+        } catch (error) {
+            console.error('Failed to load available images:', error);
+            jobErrorMessage = 'Failed to load available images.';
+        } finally {
+            optionsLoading = false;
+        }
+    });
+
     /**
      * Placeholder function for the FileUploader completion.
      * In a real implementation, FileUploader must be refactored to call this on success.
@@ -24,6 +40,7 @@
     function handleUploadComplete(event) {
         uploadedFileId = event.detail.fileId;
         jobStatusMessage = `File uploaded! ID: ${uploadedFileId}. Ready to run job.`;
+        console.log('Received uploaded file ID:', uploadedFileId);
     }
 
     async function runJob() {
@@ -59,11 +76,17 @@
 
     <div class="input-group">
         <label for="option-select">Select Processing Type:</label>
-        <select id="option-select" bind:value={selectedOption} disabled={isJobRunning}>
-            {#each options as option}
-                <option value={option}>{option}</option>
-            {/each}
-        </select>
+        {#if optionsLoading}
+            <span>Loading available images...</span>
+        {:else if options.length > 0}
+            <select id="option-select" bind:value={selectedOption} disabled={isJobRunning}>
+                {#each options as option}
+                    <option value={option}>{option}</option>
+                {/each}
+            </select>
+        {:else}
+            <span class="error-message">No available images to select.</span>
+        {/if}
     </div>
 
     <button 

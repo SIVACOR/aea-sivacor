@@ -167,6 +167,12 @@ export async function initiateFileUpload(file) {
     return response;
 }
 
+export async function getImages() {
+    const endpoint = '/sivacor/image_tags';
+    const response = await api(endpoint);
+    return response.image_tags;
+}
+
 /**
  * Step 2: Uploads a single chunk of a file.
  * @param {string} uploadId - The ID returned from initiateFileUpload.
@@ -175,8 +181,7 @@ export async function initiateFileUpload(file) {
  */
 export async function uploadFileChunk(uploadId, offset, chunk) {
     const endpoint = `/file/chunk?offset=${offset}&uploadId=${uploadId}`;
-
-    await api(endpoint, {
+    const response = await api(endpoint, {
         method: 'POST',
         headers: {
             // Must override the default 'application/json' set in api()
@@ -185,6 +190,7 @@ export async function uploadFileChunk(uploadId, offset, chunk) {
         },
         body: chunk
     });
+    return response;
 }
 
 /**
@@ -194,22 +200,16 @@ export async function uploadFileChunk(uploadId, offset, chunk) {
  * @returns {Promise<any>} The response object from the job creation endpoint.
  */
 export async function submitJob(fileId, dropdownValue) {
-    const endpoint = `/job`;
+    const endpoint = `/sivacor/submit_job`;
 
     // Query arguments for the job API
     const queryArgs = new URLSearchParams({
-        fileId: fileId,
-        processingType: dropdownValue // Using a descriptive name for the qarg
+        id: fileId,
+        image_tag: dropdownValue // Using a descriptive name for the qarg
     });
-
-    // The request body (often required even if using qargs, depending on API design)
-    const body = {
-        // You might add other static parameters here if required by the API
-    };
 
     const response = await api(`${endpoint}?${queryArgs.toString()}`, {
         method: 'POST',
-        body: JSON.stringify(body)
     });
 
     return response;

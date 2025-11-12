@@ -42,11 +42,12 @@
             let uploadedBytes = 0;
 
             // Step 2: Upload chunks
+            let lastChunk = null;
             while (offset < totalSize) {
                 const chunk = selectedFile.slice(offset, offset + UPLOAD_CHUNK_SIZE);
                 uploadStatus = `Uploading chunk ${Math.ceil(offset / UPLOAD_CHUNK_SIZE) + 1}...`;
                 
-                await uploadFileChunk(uploadId, offset, chunk);
+                lastChunk = await uploadFileChunk(uploadId, offset, chunk);
 
                 uploadedBytes = offset + chunk.size;
                 uploadProgress = Math.floor((uploadedBytes / totalSize) * 100);
@@ -56,9 +57,9 @@
             // Upload complete, final progress to 100%
             uploadProgress = 100;
             uploadStatus = 'Upload complete!';
-
+            console.log('File upload completed successfully:', lastChunk);
             dispatch('uploadcomplete', {
-                fileId: uploadId // This is the ID the JobRunner needs
+                fileId: lastChunk._id // This is the ID the JobRunner needs
             });
             
         } catch (error) {
