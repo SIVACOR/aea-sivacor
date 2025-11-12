@@ -2,7 +2,8 @@ import { user } from './stores';
 import Cookies from 'js-cookie'; // You'll need to install 'js-cookie' (npm install js-cookie)
 
 // Replace with your actual base URL
-const BASE_URL = 'https://girder.local.xarthisius.xyz';
+const BASE_URL = 'https://girder.local.xarthisius.xyz/api/v1';
+const UPLOAD_CHUNK_SIZE = 1024 * 1024 * 5; // 5MB
 
 /**
  * Fetches the list of OAuth providers.
@@ -11,7 +12,7 @@ const BASE_URL = 'https://girder.local.xarthisius.xyz';
  */
 export async function fetchOAuthProviders(redirectUrl) {
     const encodedRedirect = encodeURIComponent(redirectUrl);
-    const endpoint = `/api/v1/oauth/provider?redirect=${encodedRedirect}&list=true`;
+    const endpoint = `/oauth/provider?redirect=${encodedRedirect}&list=true`;
     
     // Use the existing api function for the GET request
     const providers = await api(endpoint);
@@ -56,7 +57,7 @@ export function clearAuthToken() {
 
 /**
  * Generic function to make an authenticated API call.
- * @param {string} endpoint - The API path (e.g., '/api/v1/user/me').
+ * @param {string} endpoint - The API path (e.g., '/user/me').
  * @param {object} options - Fetch options.
  * @returns {Promise<any>} The parsed JSON response.
  */
@@ -95,7 +96,7 @@ export async function api(endpoint, options = {}) {
  */
 export async function checkAuthentication() {
     try {
-        const userData = await api('/api/v1/user/me');
+        const userData = await api('/user/me');
         user.set(userData); // Will be null or the user object
     } catch (error) {
         console.error('Authentication check failed:', error);
@@ -109,7 +110,7 @@ export async function checkAuthentication() {
 export async function logout() {
     try {
         // 1. Call the logout API endpoint
-        await api('/api/v1/user/authentication', {
+        await api('/user/authentication', {
             method: 'DELETE'
         });
     } catch (error) {
@@ -123,4 +124,48 @@ export async function logout() {
         // 4. Navigate to the homepage (optional, but good UX)
         window.location.href = '/';
     }
+}
+
+/**
+ * Step 1: Initiates a multi-part file upload.
+ * @param {File} file - The file object to upload.
+ * @param {string} parentType - The type of the parent object (e.g., 'folder').
+ * @param {string} parentId - The ID of the parent object.
+ * @returns {Promise<{id: string, name: string}>} The upload object with ID.
+ */
+export async function initiateFileUpload(file, parentType, parentId) {
+    const query = new URLSearchParams({
+        parentType,
+        parentId,
+        name: file.name,
+        size: file.size,
+        mimeType: file.type || 'application/octet-stream'
+    });
+
+    // Use the existing api function for the POST request
+    const response = await api(`/file?${query.toString()}`, {
+        method: 'POST'
+    });
+
+    return response;
+}
+
+/**
+ * Step 2: Uploads a single chunk of a file.
+ * @param {string} uploadId - The ID returned from initiateFileUpload.
+ * @param {number} offset - The starting byte offset of this chunk.
+ * @param {Blob} chunk - The chunk of file data.
+ */
+export async function uploadFileChunk(uploadId, offset, chunk) {
+    const endpoint = `/file/chunk?offset=${offset}&uploadId=${uploadId}`;
+
+    await api(endpoint, {
+        method: 'POST',
+        headers: {
+            // Must override the default 'application/json' set in api()
+            'Content-Type': 'application/octet-stream',
+            // Do not send Content-Length, fetch handles this for a Blob/File
+        },
+        body: chunk
+    });
 }
