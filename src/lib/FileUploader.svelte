@@ -1,7 +1,7 @@
 <script>
-    import { initiateFileUpload, uploadFileChunk, api } from './api';
+    import { createEventDispatcher } from 'svelte';
+    import { initiateFileUpload, uploadFileChunk, getUploadsFolder } from './api';
 
-    // Define the chunk size (must match the one in api.js)
     const UPLOAD_CHUNK_SIZE = 1024 * 1024 * 5; 
 
     // State variables
@@ -12,9 +12,7 @@
     let uploadStatus = '';
     let errorMessage = null;
     
-    // Mock parent information (replace with actual logic to get these values)
-    const parentType = 'folder'; 
-    const parentId = '6913cd0e172046d1850815bc'; 
+    const dispatch = createEventDispatcher();
 
     function handleFileSelect(event) {
         errorMessage = null;
@@ -37,7 +35,7 @@
 
         try {
             // Step 1: Initiate the upload
-            const { _id: uploadId } = await initiateFileUpload(selectedFile, parentType, parentId);
+            const { _id: uploadId } = await initiateFileUpload(selectedFile);
             const totalSize = selectedFile.size;
 
             let offset = 0;
@@ -58,6 +56,10 @@
             // Upload complete, final progress to 100%
             uploadProgress = 100;
             uploadStatus = 'Upload complete!';
+
+            dispatch('uploadcomplete', {
+                fileId: uploadId // This is the ID the JobRunner needs
+            });
             
         } catch (error) {
             console.error('File upload failed:', error);

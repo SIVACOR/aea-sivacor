@@ -1,9 +1,9 @@
+import { get } from 'svelte/store';
 import { user } from './stores';
 import Cookies from 'js-cookie'; // You'll need to install 'js-cookie' (npm install js-cookie)
 
 // Replace with your actual base URL
 const BASE_URL = 'https://girder.local.xarthisius.xyz/api/v1';
-const UPLOAD_CHUNK_SIZE = 1024 * 1024 * 5; // 5MB
 
 /**
  * Fetches the list of OAuth providers.
@@ -22,6 +22,22 @@ export async function fetchOAuthProviders(redirectUrl) {
     }
     
     return providers;
+}
+
+export function getCurrentUser() {
+    // Use get(store) to synchronously read the store's value
+    const currentUser = get(user);
+    return currentUser;
+}
+
+export async function getUploadsFolder() {
+    const user = getCurrentUser();
+    const endpoint = `/folder?parentType=user&parentId=${user._id}&name=Uploads&limit=1`;
+    const folder = await api(endpoint);
+    if (!Array.isArray(folder) || folder.length !== 1) {
+        throw new Error('Uploads folder not found for the current user.');
+    }
+    return folder[0]._id;
 }
 
 /**
@@ -133,10 +149,11 @@ export async function logout() {
  * @param {string} parentId - The ID of the parent object.
  * @returns {Promise<{id: string, name: string}>} The upload object with ID.
  */
-export async function initiateFileUpload(file, parentType, parentId) {
+export async function initiateFileUpload(file) {
+    const parentId = await getUploadsFolder(); // Ensure we get the correct Uploads folder ID
     const query = new URLSearchParams({
-        parentType,
-        parentId,
+        parentType: 'folder',
+        parentId: parentId,
         name: file.name,
         size: file.size,
         mimeType: file.type || 'application/octet-stream'
@@ -168,4 +185,32 @@ export async function uploadFileChunk(uploadId, offset, chunk) {
         },
         body: chunk
     });
+}
+
+/**
+ * Submits a new processing job.
+ * @param {string} fileId - The ID of the uploaded file.
+ * @param {string} dropdownValue - The selected value from the dropdown ('image1' or 'image2').
+ * @returns {Promise<any>} The response object from the job creation endpoint.
+ */
+export async function submitJob(fileId, dropdownValue) {
+    const endpoint = `/job`;
+
+    // Query arguments for the job API
+    const queryArgs = new URLSearchParams({
+        fileId: fileId,
+        processingType: dropdownValue // Using a descriptive name for the qarg
+    });
+
+    // The request body (often required even if using qargs, depending on API design)
+    const body = {
+        // You might add other static parameters here if required by the API
+    };
+
+    const response = await api(`${endpoint}?${queryArgs.toString()}`, {
+        method: 'POST',
+        body: JSON.stringify(body)
+    });
+
+    return response;
 }
