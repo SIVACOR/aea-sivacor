@@ -1,12 +1,9 @@
 <script>
     import { onMount, onDestroy } from "svelte";
-    import { get } from "svelte/store";
-    import { user } from "./stores";
     import {
         fetchJobDetails,
         cancelJob,
         JOB_POLLING_INTERVAL,
-        submitJob,
         getLatestSubmission,
         downloadFile,
     } from "./api";
