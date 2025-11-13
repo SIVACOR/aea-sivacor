@@ -75,9 +75,9 @@
 <div class="job-runner-container md-card">
     <div class="runner-header">
         <span class="material-icons runner-icon">play_circle</span>
-        <h3>Create Processing Job</h3>
+        <h3>New Submission</h3>
         <p class="runner-description">
-            Upload your file and configure the processing parameters
+            Upload a single file (tarball or zipball) and choose a processing image to run your job.
         </p>
     </div>
 
@@ -92,7 +92,7 @@
             <div class="input-group">
                 <label for="option-select">
                     <span class="material-icons label-icon">settings</span>
-                    Processing Type
+                    Compute Environment
                 </label>
                 {#if optionsLoading}
                     <div class="loading-state">
@@ -128,7 +128,7 @@
                     Processing...
                 {:else}
                     <span class="material-icons">play_arrow</span>
-                    Run Job with {selectedOption || "Selected Image"}
+                    Run with {selectedOption || "Selected Image"}
                 {/if}
             </button>
         </div>

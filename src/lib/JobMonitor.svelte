@@ -227,9 +227,9 @@
 
 <div class="job-monitor-container md-card">
     <div class="monitor-header">
-        <span class="material-icons monitor-icon">monitoring</span>
-        <h2>Job Status Monitor</h2>
-        <p class="monitor-description">Track and manage your processing jobs</p>
+      <span class="material-icons monitor-icon">monitor</span>
+      <h2>SIVACOR Submission</h2>
+        <p class="monitor-description">Track and manage your last job</p>
     </div>
 
     <div class="monitor-content">
