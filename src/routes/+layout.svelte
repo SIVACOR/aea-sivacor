@@ -20,7 +20,8 @@
 
             // 3. Navigate to the cleaned URL without reloading the page
             // Replace the current history entry so the back button works as expected.
-            await goto(newUrl, { replaceState: true });
+            // eslint-disable-next-line svelte/no-navigation-without-resolve
+            await goto(newUrl || "/", { replaceState: true });
         }
 
         // Run the authentication check (This uses the newly set token if one was present)

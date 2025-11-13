@@ -77,7 +77,8 @@
         <span class="material-icons runner-icon">play_circle</span>
         <h3>New Submission</h3>
         <p class="runner-description">
-            Upload a single file (tarball or zipball) and choose a processing image to run your job.
+            Upload a single file (tarball or zipball) and choose a processing
+            image to run your job.
         </p>
     </div>
 
@@ -105,7 +106,7 @@
                         bind:value={selectedOption}
                         disabled={isJobRunning}
                     >
-                        {#each options as option}
+                        {#each options as option (option)}
                             <option value={option}>{option}</option>
                         {/each}
                     </select>

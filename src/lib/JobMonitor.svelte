@@ -165,12 +165,16 @@
 
     onDestroy(stopPolling);
 
-    $: if (
-        currentJobId &&
-        !isMonitoring &&
-        (!jobDetails || jobDetails.status < 3)
-    ) {
-        startPolling(currentJobId);
+    // Use a separate variable to track when we should start polling
+    let shouldPoll = false;
+    $: shouldPoll =
+        currentJobId && !isMonitoring && (!jobDetails || jobDetails.status < 3);
+
+    // Use an effect to handle polling without creating infinite loops
+    $: if (shouldPoll && currentJobId) {
+        setTimeout(() => {
+            startPolling(currentJobId);
+        }, 0);
     }
 
     function handleJobSubmitted(event) {
@@ -217,8 +221,8 @@
 
 <div class="job-monitor-container md-card">
     <div class="monitor-header">
-      <span class="material-icons monitor-icon">monitor</span>
-      <h2>SIVACOR Submission</h2>
+        <span class="material-icons monitor-icon">monitor</span>
+        <h2>SIVACOR Submission</h2>
         <p class="monitor-description">Track and manage your last job</p>
     </div>
 
@@ -301,6 +305,7 @@
                                 href={jobDetails.resultPath}
                                 target="_blank"
                                 class="view-result-link"
+                                rel="noopener noreferrer"
                             >
                                 <span class="material-icons">open_in_new</span>
                                 View Result
@@ -372,7 +377,7 @@
                             <h4>Job Logs</h4>
                         </div>
                         <div class="logs-container">
-                            {#each jobDetails.log as logLine}
+                            {#each jobDetails.log as logLine, index (index)}
                                 <div class="log-line">{logLine}</div>
                             {/each}
                         </div>
@@ -387,7 +392,7 @@
                             <h4>Downloadable Files</h4>
                         </div>
                         <div class="files-grid">
-                            {#each getDownloadableFiles() as file}
+                            {#each getDownloadableFiles() as file (file.id)}
                                 <div class="file-card">
                                     <div class="file-info">
                                         <span class="material-icons file-icon"
