@@ -1,6 +1,6 @@
 import { get } from 'svelte/store';
 import { user } from './stores';
-import Cookies from 'js-cookie'; // You'll need to install 'js-cookie' (npm install js-cookie)
+import Cookies from 'js-cookie';
 import { env } from '$env/dynamic/public';
 
 // API Base URL from environment variable with fallback for development
@@ -62,12 +62,7 @@ export async function getLatestSubmission() {
  * @param {string} token - The 'Girder-Token' value.
  */
 export function setAuthToken(token) {
-    // You can choose to store it as a cookie or in localStorage.
-    // Storing as a Cookie is generally preferred for authentication tokens
-    // as it's automatically sent with requests, and can be configured with 'HttpOnly'.
-    // For this client-side example, we'll use a client-readable cookie.
     Cookies.set('girderToken', token, { expires: 7, secure: true, sameSite: 'Lax' });
-    // If you prefer localStorage:
     // localStorage.setItem('girderToken', token); 
 }
 
