@@ -20,6 +20,14 @@
         uploadProgress = 0;
     }
 
+    function formatFileSize(bytes) {
+        if (bytes === 0) return "0 Bytes";
+        const k = 1024;
+        const sizes = ["Bytes", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+    }
+
     /**
      * Uploads the file in chunks.
      */
@@ -76,103 +84,310 @@
             selectedFile = null;
         }
     }
+
+    function resetUpload() {
+        uploadProgress = 0;
+        uploadStatus = "";
+        errorMessage = null;
+        selectedFile = null;
+        if (fileInput) fileInput.value = "";
+    }
 </script>
 
-<div class="upload-widget">
-    <h3>File Upload Widget</h3>
+<div class="upload-widget md-card">
+    <div class="upload-header">
+        <span class="material-icons upload-icon">cloud_upload</span>
+        <h3>File Upload</h3>
+        <p class="upload-description">Select a file to upload for processing</p>
+    </div>
 
     {#if errorMessage}
-        <p class="error-message">Error: {errorMessage}</p>
+        <div class="error-banner">
+            <span class="material-icons">error</span>
+            <span>{errorMessage}</span>
+        </div>
     {/if}
 
-    <input
-        type="file"
-        bind:this={fileInput}
-        on:change={handleFileSelect}
-        disabled={isUploading}
-    />
+    <div class="upload-area" class:disabled={isUploading}>
+        <input
+            type="file"
+            bind:this={fileInput}
+            on:change={handleFileSelect}
+            disabled={isUploading}
+            id="file-input"
+            class="file-input"
+        />
+        <label for="file-input" class="file-input-label">
+            <span class="material-icons file-icon">attach_file</span>
+            <div class="file-input-text">
+                <strong>Choose a file</strong> or drag it here
+                <small>Maximum file size: 500MB</small>
+            </div>
+        </label>
+    </div>
 
     {#if selectedFile && !isUploading}
-        <p>
-          Selected: <strong>{selectedFile.name}</strong> ({Math.round(
-                selectedFile.size / 1024,
-            )} KB)
-        </p>
-        <button on:click={startUpload} disabled={isUploading}>
-            Start Upload
-        </button>
-    {:else if isUploading || uploadProgress > 0}
-        <div class="progress-container">
-            <div class="progress-bar" style="width: {uploadProgress}%;"></div>
-            <span class="progress-text">{uploadProgress}% - {uploadStatus}</span
-            >
+        <div class="file-preview">
+            <div class="file-info">
+                <span class="material-icons file-type-icon">description</span>
+                <div class="file-details">
+                    <div class="file-name">{selectedFile.name}</div>
+                    <div class="file-size">
+                        {formatFileSize(selectedFile.size)}
+                    </div>
+                </div>
+            </div>
+            <button on:click={startUpload} class="upload-button">
+                <span class="material-icons">cloud_upload</span>
+                Start Upload
+            </button>
         </div>
-    {:else if uploadProgress === 100}
-        <p class="success-message">File uploaded successfully!</p>
-        <button
-            on:click={() => {
-                uploadProgress = 0;
-                uploadStatus = "";
-            }}
-        >
-            Upload Another
-        </button>
+    {/if}
+
+    {#if isUploading || uploadProgress > 0}
+        <div class="upload-progress">
+            <div class="progress-header">
+                <span class="progress-label">{uploadStatus}</span>
+                <span class="progress-percent">{uploadProgress}%</span>
+            </div>
+            <div class="md-progress">
+                <div
+                    class="md-progress-bar"
+                    style="width: {uploadProgress}%"
+                ></div>
+            </div>
+        </div>
+    {/if}
+
+    {#if uploadProgress === 100 && !isUploading}
+        <div class="upload-success">
+            <div class="success-content">
+                <span class="material-icons success-icon">check_circle</span>
+                <div>
+                    <div class="success-title">Upload Successful!</div>
+                    <div class="success-subtitle">
+                        Your file is ready for processing
+                    </div>
+                </div>
+            </div>
+            <button on:click={resetUpload} class="md-button-text">
+                <span class="material-icons">add</span>
+                Upload Another
+            </button>
+        </div>
     {/if}
 </div>
 
 <style>
     .upload-widget {
-        border: 1px solid #ddd;
-        padding: 20px;
-        margin-top: 20px;
-        border-radius: 8px;
-        max-width: 500px;
+        margin-bottom: var(--md-spacing-lg);
     }
-    .progress-container {
-        width: 100%;
-        background-color: #f3f3f3;
-        border-radius: 5px;
-        margin-top: 10px;
+
+    .upload-header {
+        text-align: center;
+        margin-bottom: var(--md-spacing-lg);
+    }
+
+    .upload-icon {
+        font-size: 3rem;
+        color: var(--md-primary);
+        margin-bottom: var(--md-spacing-sm);
+    }
+
+    .upload-header h3 {
+        margin: 0 0 var(--md-spacing-xs) 0;
+        color: var(--md-on-surface);
+    }
+
+    .upload-description {
+        color: var(--md-on-surface-variant);
+        font-size: var(--md-font-body2);
+        margin: 0;
+    }
+
+    .error-banner {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-md);
+        background-color: rgba(244, 67, 54, 0.1);
+        color: var(--md-error);
+        border: 1px solid rgba(244, 67, 54, 0.3);
+        border-radius: var(--md-radius-xs);
+        margin-bottom: var(--md-spacing-lg);
+        font-size: var(--md-font-body2);
+        font-weight: 500;
+    }
+
+    .upload-area {
         position: relative;
-        height: 25px;
+        margin-bottom: var(--md-spacing-lg);
     }
-    .progress-bar {
-        height: 100%;
-        background-color: #4caf50;
-        border-radius: 5px;
-        text-align: right;
-        transition: width 0.3s ease;
+
+    .upload-area.disabled {
+        opacity: 0.6;
+        pointer-events: none;
     }
-    .progress-text {
+
+    .file-input {
         position: absolute;
         width: 100%;
-        top: 50%;
-        left: 0;
-        transform: translateY(-50%);
-        text-align: center;
-        color: #333;
-        font-weight: bold;
-        font-size: 14px;
-    }
-    .error-message {
-        color: #d32f2f;
-        font-weight: bold;
-    }
-    .success-message {
-        color: #4caf50;
-        font-weight: bold;
-    }
-    button {
-        margin-top: 10px;
-        padding: 8px 15px;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 4px;
+        height: 100%;
+        opacity: 0;
         cursor: pointer;
     }
-    button:disabled {
-        background-color: #ccc;
-        cursor: not-allowed;
+
+    .file-input-label {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: var(--md-spacing-xxl) var(--md-spacing-lg);
+        border: 2px dashed var(--md-outline);
+        border-radius: var(--md-radius-md);
+        background-color: var(--md-surface-variant);
+        cursor: pointer;
+        transition: all var(--md-transition-standard);
+        min-height: 120px;
+    }
+
+    .file-input-label:hover {
+        border-color: var(--md-primary);
+        background-color: rgba(25, 118, 210, 0.05);
+    }
+
+    .file-icon {
+        font-size: 2.5rem;
+        color: var(--md-primary);
+        margin-bottom: var(--md-spacing-sm);
+    }
+
+    .file-input-text {
+        text-align: center;
+    }
+
+    .file-input-text strong {
+        display: block;
+        color: var(--md-on-surface);
+        font-size: var(--md-font-body1);
+        margin-bottom: var(--md-spacing-xs);
+    }
+
+    .file-input-text small {
+        color: var(--md-on-surface-variant);
+        font-size: var(--md-font-caption);
+    }
+
+    .file-preview {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--md-spacing-md);
+        background-color: var(--md-surface-variant);
+        border-radius: var(--md-radius-sm);
+        margin-bottom: var(--md-spacing-lg);
+    }
+
+    .file-info {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-md);
+        flex: 1;
+    }
+
+    .file-type-icon {
+        font-size: 2rem;
+        color: var(--md-primary);
+    }
+
+    .file-details {
+        flex: 1;
+    }
+
+    .file-name {
+        font-weight: 500;
+        color: var(--md-on-surface);
+        margin-bottom: var(--md-spacing-xs);
+        word-break: break-word;
+    }
+
+    .file-size {
+        font-size: var(--md-font-caption);
+        color: var(--md-on-surface-variant);
+    }
+
+    .upload-button {
+        gap: var(--md-spacing-xs);
+        background-color: var(--md-primary);
+        color: white;
+        min-width: auto;
+    }
+
+    .upload-progress {
+        margin-bottom: var(--md-spacing-lg);
+    }
+
+    .progress-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--md-spacing-sm);
+    }
+
+    .progress-label {
+        font-size: var(--md-font-body2);
+        color: var(--md-on-surface);
+        font-weight: 500;
+    }
+
+    .progress-percent {
+        font-size: var(--md-font-body2);
+        color: var(--md-on-surface-variant);
+        font-weight: 500;
+    }
+
+    .upload-success {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--md-spacing-md);
+        background-color: rgba(76, 175, 80, 0.1);
+        border: 1px solid rgba(76, 175, 80, 0.3);
+        border-radius: var(--md-radius-sm);
+    }
+
+    .success-content {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-md);
+    }
+
+    .success-icon {
+        font-size: 2rem;
+        color: var(--md-success);
+    }
+
+    .success-title {
+        font-weight: 500;
+        color: var(--md-success);
+        margin-bottom: var(--md-spacing-xs);
+    }
+
+    .success-subtitle {
+        font-size: var(--md-font-caption);
+        color: var(--md-on-surface-variant);
+    }
+
+    @media (max-width: 768px) {
+        .file-preview,
+        .upload-success {
+            flex-direction: column;
+            gap: var(--md-spacing-md);
+            text-align: center;
+        }
+
+        .upload-button {
+            width: 100%;
+        }
     }
 </style>

@@ -1,7 +1,7 @@
 <script>
     import { onMount, onDestroy } from "svelte";
     import { get } from "svelte/store";
-    import { user } from "./stores"; // Assuming user store is updated with full user model
+    import { user } from "./stores";
     import {
         fetchJobDetails,
         cancelJob,
@@ -30,7 +30,7 @@
     let pollIntervalId = null;
     let currentJobId = null;
     let checkingLatestSubmission = true;
-    let latestSubmission = null; // Store the latest submission data
+    let latestSubmission = null;
 
     $: showRunner = !isMonitoring && !currentJobId && !checkingLatestSubmission;
 
@@ -50,9 +50,6 @@
         stderr_file_id: "Run error log",
     };
 
-    /**
-     * Helper function to get downloadable files from latest submission metadata
-     */
     function getDownloadableFiles() {
         if (!latestSubmission || !latestSubmission.meta) return [];
 
@@ -71,22 +68,15 @@
         return files;
     }
 
-    /**
-     * Handle file download using the downloadFile function
-     */
     async function handleFileDownload(fileId, filename) {
         try {
             await downloadFile(fileId, filename);
         } catch (error) {
             console.error("Download failed:", error);
-            // You could show an error message to the user here
             alert(`Download failed: ${error.message}`);
         }
     }
 
-    /**
-     * Polling function to check job status.
-     */
     async function checkJobStatus(jobId) {
         try {
             const details = await fetchJobDetails(jobId);
@@ -107,18 +97,13 @@
                     "Error updating submission data:",
                     submissionError,
                 );
-                // Don't fail the whole status check if submission update fails
             }
 
-            // If the job is finished (status >= 3: SUCCESS, ERROR, CANCELED), stop polling
             if (details.status >= 3) {
                 stopPolling();
-                // Keep the currentJobId so we can display the final status, but prevent restart
             }
 
-            // Handle specific status changes
             if (details.status === 4) {
-                // ERROR
                 errorMessage =
                     details.error ||
                     "The job encountered an unspecified error.";
@@ -130,24 +115,14 @@
         }
     }
 
-    /**
-     * Starts the polling process.
-     */
     function startPolling(jobId) {
         isMonitoring = true;
-
-        // Check once immediately
         checkJobStatus(jobId);
-
-        // Then set up the interval
         pollIntervalId = setInterval(() => {
             checkJobStatus(jobId);
         }, JOB_POLLING_INTERVAL);
     }
 
-    /**
-     * Clears the polling interval.
-     */
     function stopPolling() {
         if (pollIntervalId) {
             clearInterval(pollIntervalId);
@@ -156,45 +131,31 @@
         isMonitoring = false;
     }
 
-    /**
-     * Attempts to cancel the current running job.
-     */
     async function handleCancel() {
         if (!jobDetails || !jobDetails._id) return;
-
         jobStatusText = "Canceling...";
-
         try {
             await cancelJob(jobDetails._id);
-            // Wait for the next poll to confirm CANCELED status from backend
         } catch (e) {
             console.error("Job cancellation failed:", e);
             jobStatusText = "Cancellation failed.";
         }
     }
 
-    /**
-     * Clears the current job and resets the UI to show the runner form.
-     */
     function resetJob() {
         stopPolling();
         jobDetails = null;
         jobStatusText = null;
         errorMessage = null;
         currentJobId = null;
-        latestSubmission = null; // Clear submission data when resetting
+        latestSubmission = null;
     }
 
-    /**
-     * Checks for the user's latest submission on component mount.
-     */
     async function checkLatestSubmission() {
         try {
             checkingLatestSubmission = true;
             const submission = await getLatestSubmission();
             console.log("Latest submission:", submission);
-
-            // Store the submission data for downloadable files
             latestSubmission = submission;
 
             if (submission && submission.meta && submission.meta.job_id) {
@@ -203,21 +164,17 @@
             }
         } catch (error) {
             console.error("Error checking latest submission:", error);
-            // Don't show error to user, just proceed without a job
         } finally {
             checkingLatestSubmission = false;
         }
     }
 
-    // Lifecycle hook to check for latest submission when the component mounts
     onMount(() => {
         checkLatestSubmission();
     });
 
-    // Cleanup hook to stop polling when the component is destroyed
     onDestroy(stopPolling);
 
-    // Watch for changes in currentJobId - only start polling if job is not finished
     $: if (
         currentJobId &&
         !isMonitoring &&
@@ -226,309 +183,668 @@
         startPolling(currentJobId);
     }
 
-    // Function to handle successful job submission from JobRunner
     function handleJobSubmitted(event) {
         const newJobId = event.detail.jobId;
         currentJobId = newJobId;
-        // Clear latestSubmission since we have a new job
         latestSubmission = null;
-        // The reactive block above will catch this change and start polling
+    }
+
+    function getStatusColor(status) {
+        switch (status) {
+            case 0:
+            case 1:
+            case 2:
+                return "var(--md-warning)";
+            case 3:
+                return "var(--md-success)";
+            case 4:
+                return "var(--md-error)";
+            case 5:
+                return "var(--md-on-surface-variant)";
+            default:
+                return "var(--md-on-surface-variant)";
+        }
+    }
+
+    function getStatusIcon(status) {
+        switch (status) {
+            case 0:
+            case 1:
+                return "schedule";
+            case 2:
+                return "sync";
+            case 3:
+                return "check_circle";
+            case 4:
+                return "error";
+            case 5:
+                return "cancel";
+            default:
+                return "help";
+        }
     }
 </script>
 
-<div class="job-monitor-container">
-    <h2>Job Status Monitor</h2>
+<div class="job-monitor-container md-card">
+    <div class="monitor-header">
+        <span class="material-icons monitor-icon">monitoring</span>
+        <h2>Job Status Monitor</h2>
+        <p class="monitor-description">Track and manage your processing jobs</p>
+    </div>
 
-    {#if showRunner}
-        <!-- Display new JobRunner form if no active job -->
-        <JobRunner on:jobsubmitted={handleJobSubmitted} />
-    {:else if jobDetails}
-        <!-- Display job details and status -->
-        <div class="job-details card">
-            {#if latestSubmission}
-                <p>
-                    <strong>Submission codename:</strong> {latestSubmission.name}
-                </p>
-            {/if}
-            <p><strong>Job ID:</strong> {jobDetails._id}</p>
-            <p>
-                <strong>Status:</strong>
-                <span class="status-badge status-{jobDetails.status}">
-                    {jobStatusText}
-                </span>
-            </p>
-
-            {#if isJobActive}
-                <div class="polling-info">
-                    <p>Status is actively updating <span class="dot"></span></p>
-                    <button
-                        on:click={handleCancel}
-                        disabled={jobDetails.status === 5 ||
-                            jobStatusText === "Canceling..."}
-                    >
-                        Cancel Job
-                    </button>
-                </div>
-            {:else if jobDetails.status === 3}
-                <!-- SUCCESS -->
-                <div class="result-message success">
-                    <h3>✅ Job Completed Successfully!</h3>
-                    <p>Results are ready for download/view.</p>
-                    <!-- Display job results here (e.g., download link, image preview) -->
-                    {#if jobDetails.resultPath}
-                        <a href={jobDetails.resultPath} target="_blank"
-                            >View Result</a
-                        >
-                    {/if}
-                    <button on:click={resetJob} class="reset-button"
-                        >Run New Job</button
-                    >
-                </div>
-            {:else if jobDetails.status === 4}
-                <!-- ERROR -->
-                <div class="result-message error">
-                    <h3>❌ Job Failed!</h3>
-                    <p>
-                        {errorMessage ||
-                            "An error occurred during job execution."}
-                    </p>
-                    <pre>{jobDetails.log || "No error log available."}</pre>
-                    <button on:click={resetJob} class="reset-button"
-                        >Run New Job</button
-                    >
-                </div>
-            {:else if jobDetails.status === 5}
-                <!-- CANCELED -->
-                <div class="result-message cancelled">
-                    <h3>🛑 Job Canceled</h3>
-                    <p>The job was manually canceled.</p>
-                    <button on:click={resetJob} class="reset-button"
-                        >Run New Job</button
-                    >
-                </div>
-            {/if}
-
-            <!-- Display logs if available -->
-            {#if jobDetails.log && Array.isArray(jobDetails.log) && jobDetails.log.length > 0}
-                <div class="logs-section">
-                    <h4>Job Logs:</h4>
-                    <div class="logs-container">
-                        {#each jobDetails.log as logLine}
-                            <div class="log-line">{logLine}</div>
-                        {/each}
-                    </div>
-                </div>
-            {/if}
-
-            <!-- Display downloadable files if job is not actively updating -->
-            {#if !isJobActive && getDownloadableFiles().length > 0}
-                <div class="files-section">
-                    <h4>Downloadable Files:</h4>
-                    <div class="files-container">
-                        {#each getDownloadableFiles() as file}
-                            <div class="file-item">
-                                <span class="file-label">{file.label}</span>
-                                <button
-                                    on:click={() => handleFileDownload(file.id)}
-                                    class="download-button"
-                                    type="button"
-                                >
-                                    Download
-                                </button>
+    <div class="monitor-content">
+        {#if showRunner}
+            <!-- Display new JobRunner form if no active job -->
+            <JobRunner on:jobsubmitted={handleJobSubmitted} />
+        {:else if jobDetails}
+            <!-- Display job details and status -->
+            <div class="job-details-card">
+                <div class="job-header">
+                    <div class="job-info">
+                        {#if latestSubmission}
+                            <div class="submission-info">
+                                <span class="material-icons">code</span>
+                                <div>
+                                    <div class="submission-label">
+                                        Submission
+                                    </div>
+                                    <div class="submission-name">
+                                        {latestSubmission.name}
+                                    </div>
+                                </div>
                             </div>
-                        {/each}
+                        {/if}
+
+                        <div class="job-id-info">
+                            <span class="material-icons">fingerprint</span>
+                            <div>
+                                <div class="job-label">Job ID</div>
+                                <div class="job-id">{jobDetails._id}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="job-status">
+                        <div
+                            class="status-badge"
+                            style="color: {getStatusColor(jobDetails.status)}"
+                        >
+                            <span class="material-icons status-icon"
+                                >{getStatusIcon(jobDetails.status)}</span
+                            >
+                            <span class="status-text">{jobStatusText}</span>
+                        </div>
                     </div>
                 </div>
-            {/if}
-        </div>
-    {:else}
-        <p>Checking for previous jobs...</p>
-    {/if}
+
+                {#if isJobActive}
+                    <div class="active-job-section">
+                        <div class="polling-indicator">
+                            <div class="pulse-dot"></div>
+                            <span>Status updating automatically</span>
+                        </div>
+                        <button
+                            on:click={handleCancel}
+                            disabled={jobDetails.status === 5 ||
+                                jobStatusText === "Canceling..."}
+                            class="cancel-button"
+                        >
+                            <span class="material-icons">stop</span>
+                            Cancel Job
+                        </button>
+                    </div>
+                {:else if jobDetails.status === 3}
+                    <!-- SUCCESS -->
+                    <div class="result-section success">
+                        <div class="result-header">
+                            <span class="material-icons result-icon"
+                                >check_circle</span
+                            >
+                            <div>
+                                <h3>Job Completed Successfully!</h3>
+                                <p>Results are ready for download and review</p>
+                            </div>
+                        </div>
+
+                        {#if jobDetails.resultPath}
+                            <a
+                                href={jobDetails.resultPath}
+                                target="_blank"
+                                class="view-result-link"
+                            >
+                                <span class="material-icons">open_in_new</span>
+                                View Result
+                            </a>
+                        {/if}
+
+                        <button on:click={resetJob} class="new-job-button">
+                            <span class="material-icons">add</span>
+                            Run New Job
+                        </button>
+                    </div>
+                {:else if jobDetails.status === 4}
+                    <!-- ERROR -->
+                    <div class="result-section error">
+                        <div class="result-header">
+                            <span class="material-icons result-icon">error</span
+                            >
+                            <div>
+                                <h3>Job Failed</h3>
+                                <p>
+                                    {errorMessage ||
+                                        "An error occurred during job execution"}
+                                </p>
+                            </div>
+                        </div>
+
+                        {#if jobDetails.log}
+                            <div class="error-log">
+                                <div class="log-header">
+                                    <span class="material-icons"
+                                        >description</span
+                                    >
+                                    <span>Error Log</span>
+                                </div>
+                                <pre class="log-content">{jobDetails.log}</pre>
+                            </div>
+                        {/if}
+
+                        <button on:click={resetJob} class="new-job-button">
+                            <span class="material-icons">refresh</span>
+                            Try Again
+                        </button>
+                    </div>
+                {:else if jobDetails.status === 5}
+                    <!-- CANCELED -->
+                    <div class="result-section canceled">
+                        <div class="result-header">
+                            <span class="material-icons result-icon"
+                                >cancel</span
+                            >
+                            <div>
+                                <h3>Job Canceled</h3>
+                                <p>The job was manually canceled</p>
+                            </div>
+                        </div>
+
+                        <button on:click={resetJob} class="new-job-button">
+                            <span class="material-icons">add</span>
+                            Run New Job
+                        </button>
+                    </div>
+                {/if}
+
+                <!-- Display logs if available -->
+                {#if jobDetails.log && Array.isArray(jobDetails.log) && jobDetails.log.length > 0}
+                    <div class="logs-section">
+                        <div class="section-header">
+                            <span class="material-icons">description</span>
+                            <h4>Job Logs</h4>
+                        </div>
+                        <div class="logs-container">
+                            {#each jobDetails.log as logLine}
+                                <div class="log-line">{logLine}</div>
+                            {/each}
+                        </div>
+                    </div>
+                {/if}
+
+                <!-- Display downloadable files if job is not actively updating -->
+                {#if !isJobActive && getDownloadableFiles().length > 0}
+                    <div class="files-section">
+                        <div class="section-header">
+                            <span class="material-icons">file_download</span>
+                            <h4>Downloadable Files</h4>
+                        </div>
+                        <div class="files-grid">
+                            {#each getDownloadableFiles() as file}
+                                <div class="file-card">
+                                    <div class="file-info">
+                                        <span class="material-icons file-icon"
+                                            >description</span
+                                        >
+                                        <span class="file-label"
+                                            >{file.label}</span
+                                        >
+                                    </div>
+                                    <button
+                                        on:click={() =>
+                                            handleFileDownload(file.id)}
+                                        class="download-button"
+                                        type="button"
+                                    >
+                                        <span class="material-icons"
+                                            >download</span
+                                        >
+                                        Download
+                                    </button>
+                                </div>
+                            {/each}
+                        </div>
+                    </div>
+                {/if}
+            </div>
+        {:else if checkingLatestSubmission}
+            <div class="loading-state">
+                <div class="md-spinner"></div>
+                <span>Checking for previous jobs...</span>
+            </div>
+        {:else}
+            <div class="empty-state">
+                <span class="material-icons empty-icon">inbox</span>
+                <h4>No Active Jobs</h4>
+                <p>Create a new processing job to get started</p>
+            </div>
+        {/if}
+    </div>
 </div>
 
 <style>
     .job-monitor-container {
-        padding: 20px;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        margin-top: 20px;
-        max-width: 550px;
+        margin-bottom: var(--md-spacing-lg);
     }
-    .card {
-        padding: 15px;
-        background-color: #f9f9f9;
-        border-radius: 6px;
-    }
-    .status-badge {
-        display: inline-block;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-weight: bold;
-        color: white;
-        margin-left: 5px;
-    }
-    .status-0,
-    .status-1,
-    .status-2 {
-        background-color: #ffc107;
-        color: #333;
-    } /* INACTIVE, QUEUED, RUNNING (Yellow/Orange) */
-    .status-3 {
-        background-color: #28a745;
-    } /* SUCCESS (Green) */
-    .status-4 {
-        background-color: #dc3545;
-    } /* ERROR (Red) */
-    .status-5 {
-        background-color: #6c757d;
-    } /* CANCELED (Grey) */
 
-    .polling-info {
+    .monitor-header {
+        text-align: center;
+        margin-bottom: var(--md-spacing-xl);
+        padding-bottom: var(--md-spacing-lg);
+        border-bottom: 1px solid var(--md-outline-variant);
+    }
+
+    .monitor-icon {
+        font-size: 3rem;
+        color: var(--md-primary);
+        margin-bottom: var(--md-spacing-sm);
+    }
+
+    .monitor-header h2 {
+        margin: 0 0 var(--md-spacing-xs) 0;
+        color: var(--md-on-surface);
+    }
+
+    .monitor-description {
+        color: var(--md-on-surface-variant);
+        font-size: var(--md-font-body2);
+        margin: 0;
+    }
+
+    .monitor-content {
+        display: flex;
+        flex-direction: column;
+        gap: var(--md-spacing-lg);
+    }
+
+    .job-details-card {
+        border: 1px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-sm);
+        padding: var(--md-spacing-lg);
+        background-color: var(--md-surface-variant);
+        display: flex;
+        flex-direction: column;
+        gap: var(--md-spacing-lg);
+    }
+
+    .job-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: var(--md-spacing-md);
+    }
+
+    .job-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: var(--md-spacing-md);
+    }
+
+    .submission-info,
+    .job-id-info {
         display: flex;
         align-items: center;
-        gap: 20px;
-        margin-top: 10px;
+        gap: var(--md-spacing-sm);
     }
-    .dot {
-        height: 10px;
+
+    .submission-label,
+    .job-label {
+        font-size: var(--md-font-caption);
+        color: var(--md-on-surface-variant);
+        font-weight: 500;
+    }
+
+    .submission-name {
+        font-weight: 600;
+        color: var(--md-primary);
+    }
+
+    .job-id {
+        font-family: "Courier New", monospace;
+        font-size: var(--md-font-body2);
+        color: var(--md-on-surface);
+    }
+
+    .job-status {
+        display: flex;
+        align-items: center;
+    }
+
+    .status-badge {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        background-color: rgba(var(--md-surface-tint-rgb), 0.08);
+        border-radius: var(--md-radius-full);
+        font-weight: 500;
+    }
+
+    .status-icon {
+        font-size: 1.2rem;
+    }
+
+    .active-job-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--md-spacing-md);
+        background-color: rgba(var(--md-warning-rgb), 0.1);
+        border: 1px solid rgba(var(--md-warning-rgb), 0.3);
+        border-radius: var(--md-radius-sm);
+    }
+
+    .polling-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        color: var(--md-warning);
+        font-weight: 500;
+    }
+
+    .pulse-dot {
         width: 10px;
-        background-color: #ffc107;
+        height: 10px;
+        background-color: var(--md-warning);
         border-radius: 50%;
-        display: inline-block;
-        animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-        0% {
-            opacity: 0.5;
-        }
-        50% {
-            opacity: 1;
-        }
-        100% {
-            opacity: 0.5;
-        }
+        animation: pulse 1.5s ease-in-out infinite;
     }
 
-    .result-message {
-        padding: 15px;
-        border-radius: 4px;
-        margin-top: 15px;
-    }
-    .success {
-        background-color: #e6ffed;
-        border: 1px solid #28a745;
-    }
-    .error {
-        background-color: #ffe6e6;
-        border: 1px solid #dc3545;
-    }
-    .cancelled {
-        background-color: #ebebeb;
-        border: 1px solid #6c757d;
-    }
-    .reset-button {
-        background-color: #007bff;
+    .cancel-button {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        background-color: var(--md-error);
         color: white;
-        border: none;
-        padding: 8px 15px;
-        border-radius: 4px;
-        margin-top: 10px;
-        cursor: pointer;
+        font-weight: 500;
     }
 
-    .logs-section {
-        margin-top: 15px;
-        padding: 10px;
-        background-color: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 4px;
+    .cancel-button:disabled {
+        background-color: var(--md-outline-variant) !important;
+        color: var(--md-on-surface-variant) !important;
     }
 
-    .logs-section h4 {
-        margin: 0 0 10px 0;
-        color: #495057;
-        font-size: 14px;
-        font-weight: bold;
+    .result-section {
+        padding: var(--md-spacing-lg);
+        border-radius: var(--md-radius-sm);
+        display: flex;
+        flex-direction: column;
+        gap: var(--md-spacing-md);
+    }
+
+    .result-section.success {
+        background-color: rgba(var(--md-success-rgb), 0.1);
+        border: 1px solid rgba(var(--md-success-rgb), 0.3);
+        color: var(--md-success);
+    }
+
+    .result-section.error {
+        background-color: rgba(var(--md-error-rgb), 0.1);
+        border: 1px solid rgba(var(--md-error-rgb), 0.3);
+        color: var(--md-error);
+    }
+
+    .result-section.canceled {
+        background-color: rgba(var(--md-on-surface-variant-rgb), 0.1);
+        border: 1px solid rgba(var(--md-on-surface-variant-rgb), 0.3);
+        color: var(--md-on-surface-variant);
+    }
+
+    .result-header {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--md-spacing-md);
+    }
+
+    .result-icon {
+        font-size: 2rem;
+        margin-top: 2px;
+    }
+
+    .result-header h3 {
+        margin: 0 0 var(--md-spacing-xs) 0;
+        color: inherit;
+    }
+
+    .result-header p {
+        margin: 0;
+        opacity: 0.8;
+    }
+
+    .view-result-link {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        color: inherit;
+        text-decoration: none;
+        font-weight: 500;
+        padding: var(--md-spacing-sm);
+        border: 1px solid currentColor;
+        border-radius: var(--md-radius-xs);
+        transition: all var(--md-transition-standard);
+        align-self: flex-start;
+    }
+
+    .view-result-link:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .new-job-button {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-md) var(--md-spacing-lg);
+        background-color: var(--md-primary);
+        color: white;
+        font-weight: 500;
+        align-self: flex-start;
+        margin-top: var(--md-spacing-sm);
+    }
+
+    .error-log {
+        margin-top: var(--md-spacing-md);
+    }
+
+    .log-header {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        margin-bottom: var(--md-spacing-sm);
+        font-weight: 500;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-md);
+        color: var(--md-on-surface);
+    }
+
+    .section-header h4 {
+        margin: 0;
+        color: var(--md-on-surface);
     }
 
     .logs-container {
-        max-height: 200px;
+        max-height: 300px;
         overflow-y: auto;
-        background-color: #ffffff;
-        border: 1px solid #dee2e6;
-        border-radius: 3px;
-        padding: 8px;
+        background-color: var(--md-surface);
+        border: 1px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-xs);
+        padding: var(--md-spacing-md);
     }
 
     .log-line {
-        font-family: "Courier New", Consolas, monospace;
-        font-size: 12px;
+        font-family: "Courier New", monospace;
+        font-size: var(--md-font-caption);
         line-height: 1.4;
-        color: #212529;
+        color: var(--md-on-surface);
         margin-bottom: 2px;
         white-space: pre-wrap;
         word-break: break-word;
     }
 
-    .log-line:last-child {
-        margin-bottom: 0;
+    .log-content {
+        margin: 0;
+        padding: var(--md-spacing-md);
+        background-color: var(--md-surface);
+        border: 1px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-xs);
+        font-family: "Courier New", monospace;
+        font-size: var(--md-font-caption);
+        color: var(--md-on-surface);
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 200px;
+        overflow-y: auto;
     }
 
     .files-section {
-        margin-top: 15px;
-        padding: 10px;
-        background-color: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 4px;
+        margin-top: var(--md-spacing-md);
     }
 
-    .files-section h4 {
-        margin: 0 0 10px 0;
-        color: #495057;
-        font-size: 14px;
-        font-weight: bold;
+    .files-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: var(--md-spacing-md);
     }
 
-    .files-container {
+    .file-card {
         display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .file-item {
-        display: flex;
-        justify-content: space-between;
         align-items: center;
-        padding: 8px 12px;
-        background-color: #ffffff;
-        border: 1px solid #dee2e6;
-        border-radius: 3px;
+        justify-content: space-between;
+        padding: var(--md-spacing-md);
+        background-color: var(--md-surface);
+        border: 1px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-sm);
+        transition: all var(--md-transition-standard);
+    }
+
+    .file-card:hover {
+        box-shadow: var(--md-elevation-1);
+    }
+
+    .file-info {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        flex: 1;
+    }
+
+    .file-icon {
+        color: var(--md-primary);
     }
 
     .file-label {
-        font-size: 13px;
-        color: #495057;
         font-weight: 500;
+        color: var(--md-on-surface);
     }
 
     .download-button {
-        background-color: #28a745;
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        background-color: var(--md-success);
         color: white;
-        border: none;
-        padding: 4px 12px;
-        border-radius: 3px;
-        font-size: 12px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: background-color 0.2s;
+        font-size: var(--md-font-body2);
+        font-weight: 500;
+        transition: all var(--md-transition-standard);
     }
 
     .download-button:hover {
-        background-color: #218838;
+        background-color: #45a049;
+        box-shadow: var(--md-elevation-1);
     }
 
     .download-button:disabled {
-        background-color: #6c757d;
-        cursor: not-allowed;
+        background-color: var(--md-outline-variant) !important;
+        color: var(--md-on-surface-variant) !important;
+    }
+
+    .loading-state {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-xxl);
+        color: var(--md-on-surface-variant);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: var(--md-spacing-xxl);
+        color: var(--md-on-surface-variant);
+    }
+
+    .empty-icon {
+        font-size: 4rem;
+        opacity: 0.5;
+        margin-bottom: var(--md-spacing-md);
+    }
+
+    .empty-state h4 {
+        margin: 0 0 var(--md-spacing-sm) 0;
+        color: var(--md-on-surface-variant);
+    }
+
+    @keyframes pulse {
+        0%,
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+        50% {
+            opacity: 0.5;
+            transform: scale(1.2);
+        }
+    }
+
+    @media (max-width: 768px) {
+        .job-header {
+            flex-direction: column;
+            gap: var(--md-spacing-md);
+        }
+
+        .active-job-section {
+            flex-direction: column;
+            gap: var(--md-spacing-md);
+            text-align: center;
+        }
+
+        .result-header {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .files-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .file-card {
+            flex-direction: column;
+            gap: var(--md-spacing-sm);
+            text-align: center;
+        }
     }
 </style>
