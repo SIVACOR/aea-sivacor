@@ -35,11 +35,7 @@
     $: showRunner = !isMonitoring && !currentJobId && !checkingLatestSubmission;
 
     // Reactive check for polling state
-    $: isJobActive =
-        jobDetails &&
-        (jobDetails.status === 0 || // INACTIVE
-            jobDetails.status === 1 || // QUEUED
-            jobDetails.status === 2); // RUNNING
+    $: isJobActive = jobDetails && jobDetails.status < 3;
 
     // File type mappings for downloadable files
     const FILE_TYPE_LABELS = {
@@ -52,7 +48,6 @@
 
     function getDownloadableFiles() {
         if (!latestSubmission || !latestSubmission.meta) return [];
-
         const files = [];
         const meta = latestSubmission.meta;
 
@@ -64,7 +59,6 @@
                 });
             }
         }
-
         return files;
     }
 
@@ -80,9 +74,6 @@
     async function checkJobStatus(jobId) {
         try {
             const details = await fetchJobDetails(jobId);
-            jobDetails = details;
-            jobStatusText = STATUS[details.status] || "UNKNOWN";
-
             try {
                 const submission = await getLatestSubmission();
                 if (
@@ -108,6 +99,9 @@
                     details.error ||
                     "The job encountered an unspecified error.";
             }
+
+            jobDetails = details;
+            jobStatusText = STATUS[details.status] || "UNKNOWN";
         } catch (e) {
             console.error("Error fetching job details:", e);
             errorMessage = "Could not fetch job status.";
@@ -155,7 +149,6 @@
         try {
             checkingLatestSubmission = true;
             const submission = await getLatestSubmission();
-            console.log("Latest submission:", submission);
             latestSubmission = submission;
 
             if (submission && submission.meta && submission.meta.job_id) {

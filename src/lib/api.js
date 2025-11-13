@@ -44,7 +44,8 @@ export async function getUploadsFolder() {
 export async function getLatestSubmission() {
     const collections = await api('/collection?name=Submissions');
     if (!Array.isArray(collections) || collections.length !== 1) {
-        throw new Error('Could not find Submissions collection.');
+        return null;
+        //throw new Error('Could not find Submissions collection.');
     }
     const collectionId = collections[0]._id;
     const submissions = await api(`/folder?parentType=collection&parentId=${collectionId}&limit=1&sort=created&sortdir=-1`);
