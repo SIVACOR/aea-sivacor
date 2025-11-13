@@ -1,5 +1,5 @@
 # Multi-stage build for optimized production container
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -17,10 +17,10 @@ COPY . .
 RUN npm run build:production
 
 # Production stage
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 
 # Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init curl
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs
@@ -32,6 +32,7 @@ WORKDIR /app
 # Copy built application from builder stage
 COPY --from=builder --chown=svelte:nodejs /app/build build/
 COPY --from=builder --chown=svelte:nodejs /app/package.json .
+COPY --from=builder --chown=svelte:nodejs /app/package-lock.json .
 
 # Install only production dependencies
 RUN npm ci --only=production && npm cache clean --force
