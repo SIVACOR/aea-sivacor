@@ -94,7 +94,7 @@
 
     {#if selectedFile && !isUploading}
         <p>
-            Selected: **{selectedFile.name}** ({Math.round(
+          Selected: <strong>{selectedFile.name}</strong> ({Math.round(
                 selectedFile.size / 1024,
             )} KB)
         </p>

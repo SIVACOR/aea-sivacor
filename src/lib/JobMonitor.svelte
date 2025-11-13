@@ -93,45 +93,25 @@
             jobDetails = details;
             jobStatusText = STATUS[details.status] || "UNKNOWN";
 
-            // If job is still active, also refresh the latest submission data
-            // to get updated file metadata as they become available
-            if (details.status < 3) {
-                try {
-                    const submission = await getLatestSubmission();
-                    if (
-                        submission &&
-                        submission.meta &&
-                        submission.meta.job_id === jobId
-                    ) {
-                        latestSubmission = submission;
-                    }
-                } catch (submissionError) {
-                    console.error(
-                        "Error updating submission data:",
-                        submissionError,
-                    );
-                    // Don't fail the whole status check if submission update fails
+            try {
+                const submission = await getLatestSubmission();
+                if (
+                    submission &&
+                    submission.meta &&
+                    submission.meta.job_id === jobId
+                ) {
+                    latestSubmission = submission;
                 }
+            } catch (submissionError) {
+                console.error(
+                    "Error updating submission data:",
+                    submissionError,
+                );
+                // Don't fail the whole status check if submission update fails
             }
 
             // If the job is finished (status >= 3: SUCCESS, ERROR, CANCELED), stop polling
             if (details.status >= 3) {
-                // Do a final update of submission data when job completes
-                try {
-                    const submission = await getLatestSubmission();
-                    if (
-                        submission &&
-                        submission.meta &&
-                        submission.meta.job_id === jobId
-                    ) {
-                        latestSubmission = submission;
-                    }
-                } catch (submissionError) {
-                    console.error(
-                        "Error updating final submission data:",
-                        submissionError,
-                    );
-                }
                 stopPolling();
                 // Keep the currentJobId so we can display the final status, but prevent restart
             }
@@ -265,6 +245,11 @@
     {:else if jobDetails}
         <!-- Display job details and status -->
         <div class="job-details card">
+            {#if latestSubmission}
+                <p>
+                    <strong>Submission codename:</strong> {latestSubmission.name}
+                </p>
+            {/if}
             <p><strong>Job ID:</strong> {jobDetails._id}</p>
             <p>
                 <strong>Status:</strong>
