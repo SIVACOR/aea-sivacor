@@ -14,14 +14,14 @@ export const JOB_POLLING_INTERVAL = 5000; // 5 seconds
 export async function fetchOAuthProviders(redirectUrl) {
     const encodedRedirect = encodeURIComponent(redirectUrl);
     const endpoint = `/oauth/provider?redirect=${encodedRedirect}&list=true`;
-    
+
     // Use the existing api function for the GET request
     const providers = await api(endpoint);
 
     if (!Array.isArray(providers) || providers.length === 0) {
         throw new Error('No OAuth providers found.');
     }
-    
+
     return providers;
 }
 
@@ -39,6 +39,20 @@ export async function getUploadsFolder() {
         throw new Error('Uploads folder not found for the current user.');
     }
     return folder[0]._id;
+}
+
+export async function getLatestSubmission() {
+    const collections = await api('/collection?name=Submissions');
+    if (!Array.isArray(collections) || collections.length !== 1) {
+        throw new Error('Could not find Submissions collection.');
+    }
+    const collectionId = collections[0]._id;
+    const submissions = await api(`/folder?parentType=collection&parentId=${collectionId}&limit=1&sort=created&sortdir=-1`);
+    if (!Array.isArray(submissions) || submissions.length === 0) {
+        return null;
+    } else {
+        return submissions[0];
+    }
 }
 
 /**
@@ -192,6 +206,76 @@ export async function uploadFileChunk(uploadId, offset, chunk) {
         body: chunk
     });
     return response;
+}
+
+/**
+ * Downloads a file by ID using blob to prevent opening new windows.
+ * Ensures all authentication headers are passed properly.
+ * @param {string} fileId - The ID of the file to download.
+ * @param {string|null} filename - Optional filename for the download. If not provided, will use the fileId.
+ * @returns {Promise<void>} Resolves when download is initiated.
+ */
+export async function downloadFile(fileId, filename = null) {
+    if (!fileId) {
+        throw new Error("File ID must be provided.");
+    }
+
+    const token = getAuthToken();
+    const headers = {};
+
+    if (token) {
+        headers['Girder-Token'] = token;
+    }
+
+    try {
+        const response = await fetch(`${BASE_URL}/file/${fileId}/download`, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            throw new Error(`Download failed: ${response.statusText}`);
+        }
+
+        // Get the blob from the response
+        const blob = await response.blob();
+
+        // Try to get filename from Content-Disposition header if not provided
+        let downloadFilename = filename;
+        if (!downloadFilename) {
+            const contentDisposition = response.headers.get('Content-Disposition');
+            if (contentDisposition && contentDisposition.includes('filename=')) {
+                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (filenameMatch && filenameMatch[1]) {
+                    downloadFilename = filenameMatch[1].replace(/['"]/g, '');
+                }
+            }
+
+            // Fallback to fileId if no filename found
+            if (!downloadFilename) {
+                downloadFilename = fileId;
+            }
+        }
+
+        // Create blob URL and trigger download
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = downloadFilename;
+
+        // Append to body, click, and remove
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Clean up the blob URL
+        window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+        console.error('File download failed:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        throw new Error(`Failed to download file: ${errorMessage}`);
+    }
 }
 
 /**

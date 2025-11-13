@@ -1,17 +1,17 @@
 <script>
-    import { createEventDispatcher } from 'svelte';
-    import { initiateFileUpload, uploadFileChunk, getUploadsFolder } from './api';
+    import { createEventDispatcher } from "svelte";
+    import { initiateFileUpload, uploadFileChunk } from "./api";
 
-    const UPLOAD_CHUNK_SIZE = 1024 * 1024 * 5; 
+    const UPLOAD_CHUNK_SIZE = 1024 * 1024 * 5;
 
     // State variables
     let fileInput;
     let selectedFile = null;
     let uploadProgress = 0;
     let isUploading = false;
-    let uploadStatus = '';
+    let uploadStatus = "";
     let errorMessage = null;
-    
+
     const dispatch = createEventDispatcher();
 
     function handleFileSelect(event) {
@@ -25,12 +25,12 @@
      */
     async function startUpload() {
         if (!selectedFile) {
-            errorMessage = 'Please select a file first.';
+            errorMessage = "Please select a file first.";
             return;
         }
 
         isUploading = true;
-        uploadStatus = 'Initiating upload...';
+        uploadStatus = "Initiating upload...";
         errorMessage = null;
 
         try {
@@ -44,9 +44,12 @@
             // Step 2: Upload chunks
             let lastChunk = null;
             while (offset < totalSize) {
-                const chunk = selectedFile.slice(offset, offset + UPLOAD_CHUNK_SIZE);
+                const chunk = selectedFile.slice(
+                    offset,
+                    offset + UPLOAD_CHUNK_SIZE,
+                );
                 uploadStatus = `Uploading chunk ${Math.ceil(offset / UPLOAD_CHUNK_SIZE) + 1}...`;
-                
+
                 lastChunk = await uploadFileChunk(uploadId, offset, chunk);
 
                 uploadedBytes = offset + chunk.size;
@@ -56,21 +59,20 @@
 
             // Upload complete, final progress to 100%
             uploadProgress = 100;
-            uploadStatus = 'Upload complete!';
-            console.log('File upload completed successfully:', lastChunk);
-            dispatch('uploadcomplete', {
-                fileId: lastChunk._id // This is the ID the JobRunner needs
+            uploadStatus = "Upload complete!";
+            console.log("File upload completed successfully:", lastChunk);
+            dispatch("uploadcomplete", {
+                fileId: lastChunk._id, // This is the ID the JobRunner needs
             });
-            
         } catch (error) {
-            console.error('File upload failed:', error);
-            errorMessage = 'Upload failed. Check console for details.';
-            uploadStatus = 'Failed';
+            console.error("File upload failed:", error);
+            errorMessage = "Upload failed. Check console for details.";
+            uploadStatus = "Failed";
             uploadProgress = 0; // Reset progress on failure
         } finally {
             isUploading = false;
             // Optionally clear the file input after successful or failed upload
-            if (fileInput) fileInput.value = '';
+            if (fileInput) fileInput.value = "";
             selectedFile = null;
         }
     }
@@ -91,18 +93,28 @@
     />
 
     {#if selectedFile && !isUploading}
-        <p>Selected: **{selectedFile.name}** ({Math.round(selectedFile.size / 1024)} KB)</p>
+        <p>
+            Selected: **{selectedFile.name}** ({Math.round(
+                selectedFile.size / 1024,
+            )} KB)
+        </p>
         <button on:click={startUpload} disabled={isUploading}>
             Start Upload
         </button>
     {:else if isUploading || uploadProgress > 0}
         <div class="progress-container">
             <div class="progress-bar" style="width: {uploadProgress}%;"></div>
-            <span class="progress-text">{uploadProgress}% - {uploadStatus}</span>
+            <span class="progress-text">{uploadProgress}% - {uploadStatus}</span
+            >
         </div>
     {:else if uploadProgress === 100}
         <p class="success-message">File uploaded successfully!</p>
-        <button on:click={() => {uploadProgress = 0; uploadStatus = '';}}>
+        <button
+            on:click={() => {
+                uploadProgress = 0;
+                uploadStatus = "";
+            }}
+        >
             Upload Another
         </button>
     {/if}
@@ -126,7 +138,7 @@
     }
     .progress-bar {
         height: 100%;
-        background-color: #4CAF50;
+        background-color: #4caf50;
         border-radius: 5px;
         text-align: right;
         transition: width 0.3s ease;
@@ -147,7 +159,7 @@
         font-weight: bold;
     }
     .success-message {
-        color: #4CAF50;
+        color: #4caf50;
         font-weight: bold;
     }
     button {
