@@ -4,7 +4,7 @@ import Cookies from 'js-cookie';
 import { env } from '$env/dynamic/public';
 
 // API Base URL from environment variable with fallback for development
-const BASE_URL = env.PUBLIC_SIVACOR_API_URL || 'https://girder.local.xarthisius.xyz/api/v1';
+const BASE_URL = env.PUBLIC_SIVACOR_API_URL || 'https://girder.sivacor.org/api/v1';
 export const JOB_POLLING_INTERVAL = 5000; // 5 seconds
 
 /**
