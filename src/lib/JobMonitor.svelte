@@ -41,6 +41,7 @@
         tsr_file_id: "Trusted Timestamp",
         stdout_file_id: "Run output log",
         stderr_file_id: "Run error log",
+        replpack_file_id: "Replicated Package",
     };
 
     function getDownloadableFiles() {
