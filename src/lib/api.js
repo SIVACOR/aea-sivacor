@@ -279,15 +279,17 @@ export async function downloadFile(fileId, filename = null) {
  * Submits a new processing job.
  * @param {string} fileId - The ID of the uploaded file.
  * @param {string} dropdownValue - The selected value from the dropdown ('image1' or 'image2').
+ * @param {string} mainFile - The name of the main execution file.
  * @returns {Promise<any>} The response object from the job creation endpoint.
  */
-export async function submitJob(fileId, dropdownValue) {
+export async function submitJob(fileId, dropdownValue, mainFile) {
     const endpoint = `/sivacor/submit_job`;
 
     // Query arguments for the job API
     const queryArgs = new URLSearchParams({
         id: fileId,
-        image_tag: dropdownValue // Using a descriptive name for the qarg
+        image_tag: dropdownValue, // Using a descriptive name for the qarg
+        main_file: mainFile
     });
 
     const response = await api(`${endpoint}?${queryArgs.toString()}`, {

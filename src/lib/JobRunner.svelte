@@ -19,6 +19,9 @@
     let jobErrorMessage = null;
     let jobId = null;
 
+    // State for the execution file name
+    let executionFileName = "main.do";
+
     const dispatch = createEventDispatcher(); // <-- Initialize
 
     onMount(async () => {
@@ -52,15 +55,27 @@
             return;
         }
 
+        if (!executionFileName.trim()) {
+            jobErrorMessage = "Please specify an execution file name.";
+            return;
+        }
+
         isJobRunning = true;
         jobErrorMessage = null;
-        jobStatusMessage = `Starting job for option: ${selectedOption}...`;
+        jobStatusMessage = `Starting job for option: ${selectedOption} with file: ${executionFileName}...`;
 
         try {
-            const jobResponse = await submitJob(uploadedFileId, selectedOption);
+            const jobResponse = await submitJob(
+                uploadedFileId,
+                selectedOption,
+                executionFileName,
+            );
             jobId = jobResponse._id || "N/A"; // Assuming the response contains a job ID
             jobStatusMessage = `Job successfully started! Job ID: ${jobId}`;
-            dispatch("jobsubmitted", { jobId: jobId });
+            dispatch("jobsubmitted", {
+                jobId: jobId,
+                executionFile: executionFileName,
+            });
         } catch (error) {
             console.error("Job submission failed:", error);
             jobErrorMessage =
@@ -118,9 +133,31 @@
                 {/if}
             </div>
 
+            <div class="input-group">
+                <label for="execution-file">
+                    <span class="material-icons label-icon">code</span>
+                    Main Filename
+                </label>
+                <input
+                    type="text"
+                    id="execution-file"
+                    bind:value={executionFileName}
+                    disabled={isJobRunning}
+                    placeholder="Enter main file name (e.g., main.do, main.R)"
+                    class="file-input"
+                />
+                <div class="input-hint">
+                    <span class="material-icons hint-icon">lightbulb</span>
+                    Common values: <code>main.do</code> for Stata,
+                    <code>main.R</code> for R
+                </div>
+            </div>
+
             <button
                 on:click={runJob}
-                disabled={!uploadedFileId || isJobRunning}
+                disabled={!uploadedFileId ||
+                    !executionFileName.trim() ||
+                    isJobRunning}
                 class="run-button"
                 class:running={isJobRunning}
             >
@@ -269,6 +306,50 @@
         background-position: right 12px center;
         background-size: 12px;
         padding-right: 40px;
+    }
+
+    .file-input {
+        padding: var(--md-spacing-md);
+        border: 2px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-xs);
+        background-color: var(--md-surface);
+        color: var(--md-on-surface);
+        font-size: var(--md-font-body1);
+        transition: border-color var(--md-transition-standard);
+    }
+
+    .file-input:focus {
+        outline: none;
+        border-color: var(--md-primary);
+    }
+
+    .file-input:disabled {
+        background-color: var(--md-surface-variant);
+        color: var(--md-on-surface-variant);
+        cursor: not-allowed;
+    }
+
+    .input-hint {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        font-size: var(--md-font-caption);
+        color: var(--md-on-surface-variant);
+        margin-top: var(--md-spacing-xs);
+    }
+
+    .hint-icon {
+        font-size: 16px;
+        color: var(--md-primary);
+    }
+
+    .input-hint code {
+        background-color: var(--md-surface-variant);
+        padding: 2px 6px;
+        border-radius: var(--md-radius-xs);
+        font-family: "Courier New", monospace;
+        font-size: 0.875em;
+        color: var(--md-on-surface);
     }
 
     .run-button {
