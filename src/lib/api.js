@@ -5,6 +5,7 @@ import { env } from '$env/dynamic/public';
 
 // API Base URL from environment variable with fallback for development
 const BASE_URL = env.SIVACOR_API_URL || 'https://girder.sivacor.org/api/v1';
+// const BASE_URL = 'https://girder.local.xarthisius.xyz/api/v1';
 export const JOB_POLLING_INTERVAL = 5000; // 5 seconds
 
 /**
@@ -73,6 +74,14 @@ export function setAuthToken(token) {
 function getAuthToken() {
     const token = Cookies.get('girderToken') || localStorage.getItem('girderToken');
     return token;
+}
+
+/**
+ * Given submission folder object, return url to view submission details.
+ * @returns {string} URL to a folder in Girder.
+ */
+export function getSubmissionFolderUrl(folder) {
+    return `${BASE_URL.replace('/api/v1', '')}/#${folder.baseParentType}/${folder.baseParentId}/folder/${folder._id}`;
 }
 
 /**

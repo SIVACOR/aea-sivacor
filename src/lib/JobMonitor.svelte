@@ -5,6 +5,7 @@
         cancelJob,
         JOB_POLLING_INTERVAL,
         getLatestSubmission,
+        getSubmissionFolderUrl,
         downloadFile,
     } from "./api";
     import JobRunner from "./JobRunner.svelte";
@@ -244,7 +245,12 @@
                                         Submission
                                     </div>
                                     <div class="submission-name">
+                                        <a href={getSubmissionFolderUrl(latestSubmission)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
                                         {latestSubmission.name}
+                                        </a>
                                     </div>
                                 </div>
                             </div>
