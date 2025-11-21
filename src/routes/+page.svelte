@@ -6,6 +6,28 @@
 
     // A reactive statement to determine if the user is logged in
     $: isAuthenticated = $user !== null;
+
+    /**
+     * Opens email client to send general support email.
+     */
+    function sendSupportEmail() {
+        const subject = encodeURIComponent("SIVACOR Support Request");
+        const body = encodeURIComponent(
+            `Hello SIVACOR Support Team,\n\nI have a question/need assistance with the SIVACOR application.\n\nUser: ${$user ? `${$user.firstName} ${$user.lastName}` : "Anonymous"}\n\nDescription of my question/issue:\n[Please describe your question or issue here]\n\nThank you for your assistance,`,
+        );
+        window.location.href = `mailto:support@sivacor.org?subject=${subject}&body=${body}`;
+    }
+
+    /**
+     * Opens email client to send feedback email.
+     */
+    function sendFeedback() {
+        const subject = encodeURIComponent("SIVACOR Feedback");
+        const body = encodeURIComponent(
+            `Hello SIVACOR Team,\n\nI would like to provide feedback about the SIVACOR application.\n\nUser: ${$user ? `${$user.firstName} ${$user.lastName}` : "Anonymous"}\n\nFeedback:\n[Please share your feedback, suggestions, or feature requests here]\n\nThank you,`,
+        );
+        window.location.href = `mailto:support@sivacor.org?subject=${subject}&body=${body}`;
+    }
 </script>
 
 <div class="app-container">
@@ -45,6 +67,46 @@
     <main class="main-content">
         {#if isAuthenticated}
             <JobMonitor />
+
+            <div class="support-section md-card">
+                <div class="support-header">
+                    <span class="material-icons support-icon">help_center</span>
+                    <h3>Need Help?</h3>
+                    <p class="support-description">
+                        Have questions about using SIVACOR? Need technical
+                        assistance? We're here to help!
+                    </p>
+                </div>
+
+                <div class="support-actions">
+                    <button
+                        on:click={sendSupportEmail}
+                        class="support-button primary"
+                    >
+                        <span class="material-icons">mail</span>
+                        Contact Support
+                    </button>
+
+                    <button
+                        on:click={sendFeedback}
+                        class="support-button secondary"
+                    >
+                        <span class="material-icons">feedback</span>
+                        Send Feedback
+                    </button>
+                </div>
+
+                <div class="support-info">
+                    <div class="support-item">
+                        <span class="material-icons">email</span>
+                        <span>support@sivacor.org</span>
+                    </div>
+                    <div class="support-item">
+                        <span class="material-icons">schedule</span>
+                        <span>We typically respond within 24 hours</span>
+                    </div>
+                </div>
+            </div>
         {:else}
             <LoginForm />
         {/if}
@@ -152,6 +214,109 @@
         animation: fadeIn 0.5s ease-in-out;
     }
 
+    .support-section {
+        margin-top: var(--md-spacing-xl);
+        text-align: center;
+    }
+
+    .support-header {
+        margin-bottom: var(--md-spacing-lg);
+    }
+
+    .support-icon {
+        font-size: 3rem;
+        color: var(--md-primary);
+        margin-bottom: var(--md-spacing-md);
+    }
+
+    .support-header h3 {
+        margin-bottom: var(--md-spacing-sm);
+        color: var(--md-on-surface);
+    }
+
+    .support-description {
+        color: var(--md-on-surface-variant);
+        font-size: var(--md-font-body2);
+        margin: 0 auto var(--md-spacing-lg);
+        max-width: 500px;
+        line-height: 1.5;
+    }
+
+    .support-actions {
+        display: flex;
+        gap: var(--md-spacing-md);
+        justify-content: center;
+        margin-bottom: var(--md-spacing-lg);
+        flex-wrap: wrap;
+    }
+
+    .support-button {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-md) var(--md-spacing-lg);
+        border-radius: var(--md-radius-sm);
+        font-size: var(--md-font-body1);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all var(--md-transition-standard);
+        min-width: 180px;
+        justify-content: center;
+        text-transform: none;
+    }
+
+    .support-button.primary {
+        background-color: var(--md-primary);
+        color: white;
+        border: none;
+    }
+
+    .support-button.primary:hover {
+        background-color: var(--md-primary-dark);
+        box-shadow: var(--md-elevation-2);
+        transform: translateY(-1px);
+    }
+
+    .support-button.secondary {
+        background-color: transparent;
+        color: var(--md-primary);
+        border: 2px solid var(--md-primary);
+    }
+
+    .support-button.secondary:hover {
+        background-color: var(--md-primary);
+        color: white;
+        box-shadow: var(--md-elevation-2);
+        transform: translateY(-1px);
+    }
+
+    .support-button:active {
+        transform: translateY(0);
+        box-shadow: var(--md-elevation-1);
+    }
+
+    .support-info {
+        display: flex;
+        justify-content: center;
+        gap: var(--md-spacing-xl);
+        padding-top: var(--md-spacing-lg);
+        border-top: 1px solid var(--md-outline-variant);
+        flex-wrap: wrap;
+    }
+
+    .support-item {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        color: var(--md-on-surface-variant);
+        font-size: var(--md-font-caption);
+    }
+
+    .support-item .material-icons {
+        font-size: 16px;
+        color: var(--md-primary);
+    }
+
     @keyframes fadeIn {
         from {
             opacity: 0;
@@ -183,6 +348,28 @@
 
         .logout-btn {
             width: 100%;
+        }
+
+        .support-actions {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .support-button {
+            min-width: 200px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .support-info {
+            flex-direction: column;
+            gap: var(--md-spacing-md);
+            text-align: center;
+        }
+
+        .support-description {
+            font-size: var(--md-font-body2);
+            padding: 0 var(--md-spacing-sm);
         }
     }
 </style>

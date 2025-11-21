@@ -37,6 +37,24 @@
     function redirectToProvider(url) {
         window.location.href = url;
     }
+
+    /**
+     * Refreshes the page to retry loading OAuth providers.
+     */
+    function retryLoadingProviders() {
+        window.location.reload();
+    }
+
+    /**
+     * Opens email client to send support email.
+     */
+    function sendSupportEmail() {
+        const subject = encodeURIComponent("SIVACOR Authentication Issue");
+        const body = encodeURIComponent(
+            `Hello SIVACOR Support Team,\n\nI'm experiencing an authentication issue with the SIVACOR application.\n\nError details:\n${error}\n\nPlease assist me with resolving this issue.\n\nThank you,`,
+        );
+        window.location.href = `mailto:support@sivacor.org?subject=${subject}&body=${body}`;
+    }
 </script>
 
 <div class="login-container md-card md-card-elevated">
@@ -52,15 +70,20 @@
             <p class="error-message">{error}</p>
             <p class="error-description">
                 Could not retrieve authentication providers. Please try again
-                later.
+                later or contact our support team for assistance.
             </p>
-            <button
-                on:click={() => window.location.reload()}
-                class="md-button-outlined"
-            >
-                <span class="material-icons">refresh</span>
-                Try Again
-            </button>
+
+            <div class="error-actions">
+                <button on:click={retryLoadingProviders} class="retry-button">
+                    <span class="material-icons">refresh</span>
+                    Try Again
+                </button>
+
+                <button on:click={sendSupportEmail} class="support-button">
+                    <span class="material-icons">mail</span>
+                    Contact Support
+                </button>
+            </div>
         </div>
     {:else if providers && providers.length > 0}
         <div class="login-content">
@@ -165,6 +188,60 @@
     .error-description {
         color: var(--md-on-surface-variant);
         margin-bottom: var(--md-spacing-lg);
+    }
+
+    .error-actions {
+        display: flex;
+        flex-direction: column;
+        gap: var(--md-spacing-md);
+        align-items: center;
+    }
+
+    .retry-button,
+    .support-button {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-md) var(--md-spacing-lg);
+        border-radius: var(--md-radius-sm);
+        font-size: var(--md-font-body1);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all var(--md-transition-standard);
+        min-width: 200px;
+        justify-content: center;
+        text-transform: none;
+    }
+
+    .retry-button {
+        background-color: var(--md-primary);
+        color: white;
+        border: none;
+    }
+
+    .retry-button:hover {
+        background-color: var(--md-primary-dark);
+        box-shadow: var(--md-elevation-2);
+        transform: translateY(-1px);
+    }
+
+    .support-button {
+        background-color: transparent;
+        color: var(--md-primary);
+        border: 2px solid var(--md-primary);
+    }
+
+    .support-button:hover {
+        background-color: var(--md-primary);
+        color: white;
+        box-shadow: var(--md-elevation-2);
+        transform: translateY(-1px);
+    }
+
+    .retry-button:active,
+    .support-button:active {
+        transform: translateY(0);
+        box-shadow: var(--md-elevation-1);
     }
 
     .login-content {
@@ -307,6 +384,16 @@
 
         .provider-button {
             padding: var(--md-spacing-md);
+        }
+
+        .error-actions {
+            gap: var(--md-spacing-sm);
+        }
+
+        .retry-button,
+        .support-button {
+            min-width: 180px;
+            padding: var(--md-spacing-sm) var(--md-spacing-md);
         }
     }
 </style>
