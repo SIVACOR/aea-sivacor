@@ -191,7 +191,7 @@ export async function initiateFileUpload(file) {
 export async function getImages() {
     const endpoint = '/sivacor/image_tags';
     const response = await api(endpoint);
-    return response.image_tags;
+    return response;
 }
 
 /**

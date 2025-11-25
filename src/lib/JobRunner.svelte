@@ -4,10 +4,18 @@
     import { submitJob, getImages } from "./api";
     import FileUploader from "./FileUploader.svelte";
 
-    // State for the dropdown
-    let selectedOption = null;
-    let options = [];
-    let optionsLoading = true;
+    // State for the dropdowns
+    /** @type {string | null} */
+    let selectedImage = null;
+    /** @type {string | null} */
+    let selectedTag = null;
+    /** @type {Record<string, string[]>} */
+    let imagesData = {}; // Object with image names as keys and tag arrays as values
+    /** @type {string[]} */
+    let availableImages = []; // Array of image names
+    /** @type {string[]} */
+    let availableTags = []; // Array of tags for selected image
+    let imagesLoading = true;
 
     // State for the file upload (will hold the ID when upload is done)
     /** @type {string | null} */
@@ -16,7 +24,9 @@
     // State for the job execution
     let isJobRunning = false;
     let jobStatusMessage = "";
+    /** @type {string | null} */
     let jobErrorMessage = null;
+    /** @type {string | null} */
     let jobId = null;
 
     // State for the execution file name
@@ -24,17 +34,34 @@
 
     const dispatch = createEventDispatcher(); // <-- Initialize
 
+    // Reactive statement to update available tags when image selection changes
+    $: {
+        if (selectedImage && imagesData[selectedImage]) {
+            availableTags = imagesData[selectedImage];
+            // Auto-select first tag if current selection is invalid
+            if (!selectedTag || !availableTags.includes(selectedTag)) {
+                selectedTag = availableTags[0] || null;
+            }
+        } else {
+            availableTags = [];
+            selectedTag = null;
+        }
+    }
+
     onMount(async () => {
         try {
-            options = await getImages();
-            if (options.length > 0) {
-                selectedOption = options[0];
+            imagesData = await getImages();
+            availableImages = Object.keys(imagesData);
+
+            if (availableImages.length > 0) {
+                selectedImage = availableImages[0];
+                // selectedTag will be set automatically by the reactive statement above
             }
         } catch (error) {
             console.error("Failed to load available images:", error);
             jobErrorMessage = "Failed to load available images.";
         } finally {
-            optionsLoading = false;
+            imagesLoading = false;
         }
     });
 
@@ -60,14 +87,20 @@
             return;
         }
 
+        if (!selectedImage || !selectedTag) {
+            jobErrorMessage = "Please select both an image and a tag.";
+            return;
+        }
+
         isJobRunning = true;
         jobErrorMessage = null;
-        jobStatusMessage = `Starting job for option: ${selectedOption} with file: ${executionFileName}...`;
+        const fullImageName = `${selectedImage}:${selectedTag}`;
+        jobStatusMessage = `Starting job for image: ${fullImageName} with file: ${executionFileName}...`;
 
         try {
             const jobResponse = await submitJob(
                 uploadedFileId,
-                selectedOption,
+                fullImageName,
                 executionFileName,
             );
             jobId = jobResponse._id || "N/A"; // Assuming the response contains a job ID
@@ -75,6 +108,9 @@
             dispatch("jobsubmitted", {
                 jobId: jobId,
                 executionFile: executionFileName,
+                image: selectedImage,
+                tag: selectedTag,
+                fullImage: fullImageName,
             });
         } catch (error) {
             console.error("Job submission failed:", error);
@@ -92,8 +128,8 @@
         <span class="material-icons runner-icon">play_circle</span>
         <h3>New Submission</h3>
         <p class="runner-description">
-            Upload a single file (tarball or zipball) and choose a processing
-            image to run your job.
+            Upload a single file (tarball or zipball), choose a Docker image and
+            tag, then specify your main execution file to run your job.
         </p>
     </div>
 
@@ -106,23 +142,23 @@
 
         <div class="config-section">
             <div class="input-group">
-                <label for="option-select">
+                <label for="image-select">
                     <span class="material-icons label-icon">settings</span>
-                    Compute Environment
+                    Docker Image
                 </label>
-                {#if optionsLoading}
+                {#if imagesLoading}
                     <div class="loading-state">
                         <div class="md-spinner"></div>
                         <span>Loading available images...</span>
                     </div>
-                {:else if options.length > 0}
+                {:else if availableImages.length > 0}
                     <select
-                        id="option-select"
-                        bind:value={selectedOption}
+                        id="image-select"
+                        bind:value={selectedImage}
                         disabled={isJobRunning}
                     >
-                        {#each options as option (option)}
-                            <option value={option}>{option}</option>
+                        {#each availableImages as image (image)}
+                            <option value={image}>{image}</option>
                         {/each}
                     </select>
                 {:else}
@@ -130,6 +166,38 @@
                         <span class="material-icons">warning</span>
                         <span>No processing images available</span>
                     </div>
+                {/if}
+            </div>
+
+            <div class="input-group">
+                <label for="tag-select">
+                    <span class="material-icons label-icon">local_offer</span>
+                    Image Tag
+                </label>
+                {#if imagesLoading}
+                    <div class="loading-state">
+                        <div class="md-spinner"></div>
+                        <span>Loading available tags...</span>
+                    </div>
+                {:else if availableTags.length > 0}
+                    <select
+                        id="tag-select"
+                        bind:value={selectedTag}
+                        disabled={isJobRunning || !selectedImage}
+                    >
+                        {#each availableTags as tag (tag)}
+                            <option value={tag}>{tag}</option>
+                        {/each}
+                    </select>
+                {:else if selectedImage}
+                    <div class="error-state">
+                        <span class="material-icons">warning</span>
+                        <span>No tags available for selected image</span>
+                    </div>
+                {:else}
+                    <select disabled class="disabled-select">
+                        <option>Select an image first</option>
+                    </select>
                 {/if}
             </div>
 
@@ -157,6 +225,8 @@
                 on:click={runJob}
                 disabled={!uploadedFileId ||
                     !executionFileName.trim() ||
+                    !selectedImage ||
+                    !selectedTag ||
                     isJobRunning}
                 class="run-button"
                 class:running={isJobRunning}
@@ -166,7 +236,9 @@
                     Processing...
                 {:else}
                     <span class="material-icons">play_arrow</span>
-                    Run with {selectedOption || "Selected Image"}
+                    Run with {selectedImage && selectedTag
+                        ? `${selectedImage}:${selectedTag}`
+                        : "Selected Image"}
                 {/if}
             </button>
         </div>
@@ -306,6 +378,18 @@
         background-position: right 12px center;
         background-size: 12px;
         padding-right: 40px;
+    }
+
+    .disabled-select {
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'><path fill='%23999' d='M2 0L0 2h4zm0 5L0 3h4z'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        background-size: 12px;
+        padding-right: 40px;
+        background-color: var(--md-surface-variant);
+        color: var(--md-on-surface-variant);
+        cursor: not-allowed;
     }
 
     .file-input {
