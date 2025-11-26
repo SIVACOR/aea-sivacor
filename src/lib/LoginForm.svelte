@@ -39,6 +39,24 @@
     }
 
     /**
+     * Gets the documentation base URL by replacing the current domain with docs subdomain
+     */
+    function getDocsUrl(path = "") {
+        const currentUrl = new URL($page.url);
+        // Replace the current subdomain/domain with docs subdomain
+        const docsHost = currentUrl.hostname.replace(/^[^.]*\./, "docs.")
+        const docsUrl = `${currentUrl.protocol}//${docsHost}${currentUrl.port ? `:${currentUrl.port}` : ""}${path}`;
+        return docsUrl;
+    }
+
+    /**
+     * Opens documentation in a new tab
+     */
+    function openDocs(path = "") {
+        window.open(getDocsUrl(path), "_blank", "noopener,noreferrer");
+    }
+
+    /**
      * Refreshes the page to retry loading OAuth providers.
      */
     function retryLoadingProviders() {
@@ -113,6 +131,25 @@
             </div>
 
             <div class="login-footer">
+                <div class="docs-links">
+                    <button
+                        class="docs-link"
+                        on:click={() => openDocs()}
+                        title="View Documentation"
+                    >
+                        <span class="material-icons">description</span>
+                        <span>Documentation</span>
+                    </button>
+                    <button
+                        class="docs-link"
+                        on:click={() => openDocs("/docs/steps/")}
+                        title="User Guide"
+                    >
+                        <span class="material-icons">help</span>
+                        <span>User Guide</span>
+                    </button>
+                </div>
+
                 <p class="security-note">
                     <span class="material-icons">security</span>
                     Your authentication is handled securely by the selected provider
@@ -338,6 +375,48 @@
         padding-top: var(--md-spacing-lg);
     }
 
+    .docs-links {
+        display: flex;
+        justify-content: center;
+        gap: var(--md-spacing-md);
+        margin-bottom: var(--md-spacing-lg);
+        flex-wrap: wrap;
+    }
+
+    .docs-link {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        background-color: transparent;
+        border: 1px solid var(--md-outline);
+        border-radius: var(--md-radius-sm);
+        color: var(--md-primary);
+        font-size: var(--md-font-caption);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all var(--md-transition-standard);
+        text-transform: none;
+        text-decoration: none;
+    }
+
+    .docs-link:hover {
+        background-color: var(--md-primary);
+        color: white;
+        border-color: var(--md-primary);
+        transform: translateY(-1px);
+        box-shadow: var(--md-elevation-1);
+    }
+
+    .docs-link:active {
+        transform: translateY(0);
+        box-shadow: none;
+    }
+
+    .docs-link .material-icons {
+        font-size: 16px;
+    }
+
     .security-note {
         display: flex;
         align-items: center;
@@ -384,6 +463,19 @@
 
         .provider-button {
             padding: var(--md-spacing-md);
+        }
+
+        .docs-links {
+            gap: var(--md-spacing-sm);
+        }
+
+        .docs-link {
+            padding: var(--md-spacing-xs) var(--md-spacing-sm);
+            font-size: 0.75rem;
+        }
+
+        .docs-link .material-icons {
+            font-size: 14px;
         }
 
         .error-actions {

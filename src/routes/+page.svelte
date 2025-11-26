@@ -3,9 +3,28 @@
     import { logout } from "../lib/api";
     import LoginForm from "../lib/LoginForm.svelte";
     import JobMonitor from "../lib/JobMonitor.svelte";
+    import { page } from "$app/stores";
 
     // A reactive statement to determine if the user is logged in
     $: isAuthenticated = $user !== null;
+
+    /**
+     * Gets the documentation base URL by replacing the current domain with docs subdomain
+     */
+    function getDocsUrl(path = "") {
+        const currentUrl = new URL($page.url);
+        // Replace the current subdomain/domain with docs subdomain
+        const docsHost = currentUrl.hostname.replace(/^[^.]*\./, "docs.")
+        const docsUrl = `${currentUrl.protocol}//${docsHost}${currentUrl.port ? `:${currentUrl.port}` : ""}${path}`;
+        return docsUrl;
+    }
+
+    /**
+     * Opens documentation in a new tab
+     */
+    function openDocs(path = "") {
+        window.open(getDocsUrl(path), "_blank", "noopener,noreferrer");
+    }
 
     /**
      * Opens email client to send general support email.
@@ -33,10 +52,31 @@
 <div class="app-container">
     <header class="app-header md-card">
         <div class="header-content">
-            <h1 class="app-title">
-                <span class="material-icons">science</span>
-                SIVACOR
-            </h1>
+            <div class="header-top">
+                <h1 class="app-title">
+                    <span class="material-icons">science</span>
+                    SIVACOR
+                </h1>
+                <nav class="header-nav">
+                    <button
+                        class="nav-link"
+                        on:click={() => openDocs()}
+                        title="View Documentation"
+                    >
+                        <span class="material-icons">description</span>
+                        <span>Docs</span>
+                    </button>
+                    <button
+                        class="nav-link"
+                        on:click={() => openDocs("/docs/steps/")}
+                        title="FAQ"
+                    >
+                        <span class="material-icons">help</span>
+                        <span>Guide</span>
+                    </button>
+                </nav>
+            </div>
+
             <p class="app-subtitle">
                 Scalable Infrastructure for Validation of Computational Social
                 Science Research
@@ -79,6 +119,14 @@
                 </div>
 
                 <div class="support-actions">
+                    <button
+                        on:click={() => openDocs()}
+                        class="support-button secondary"
+                    >
+                        <span class="material-icons">description</span>
+                        User Guide
+                    </button>
+
                     <button
                         on:click={sendSupportEmail}
                         class="support-button primary"
@@ -153,6 +201,54 @@
     .header-content {
         position: relative;
         z-index: 1;
+    }
+
+    .header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: var(--md-spacing-sm);
+    }
+
+    .header-nav {
+        display: flex;
+        gap: var(--md-spacing-sm);
+        align-items: center;
+    }
+
+    .nav-link {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        background-color: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: var(--md-radius-sm);
+        color: white;
+        font-size: var(--md-font-caption);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all var(--md-transition-standard);
+        text-transform: none;
+        min-width: 60px;
+    }
+
+    .nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .nav-link:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .nav-link .material-icons {
+        font-size: 20px;
+        color: var(--md-secondary);
     }
 
     .app-title {
@@ -331,6 +427,32 @@
     @media (max-width: 768px) {
         .app-container {
             padding: var(--md-spacing-sm);
+        }
+
+        .header-top {
+            flex-direction: column;
+            gap: var(--md-spacing-md);
+            align-items: center;
+            text-align: center;
+        }
+
+        .header-nav {
+            order: -1;
+            gap: var(--md-spacing-xs);
+        }
+
+        .nav-link {
+            min-width: 50px;
+            padding: var(--md-spacing-xs) var(--md-spacing-sm);
+            font-size: var(--md-font-caption);
+        }
+
+        .nav-link .material-icons {
+            font-size: 18px;
+        }
+
+        .nav-link span:last-child {
+            font-size: 0.7rem;
         }
 
         .app-title {
