@@ -2,6 +2,9 @@
     import { onMount } from "svelte";
     import { page } from "$app/stores";
     import { fetchOAuthProviders } from "./api";
+    import { createEventDispatcher } from "svelte";
+
+    const dispatch = createEventDispatcher();
 
     /**
      * @typedef {object} OAuthProvider
@@ -16,6 +19,9 @@
     let error = null;
 
     onMount(async () => {
+        // Dispatch title update for login state
+        dispatch("titleupdate", { title: "SIVACOR - Sign In" });
+
         try {
             // The main page URL is used as the redirect URL.
             // We use $page.url.href to get the full current URL.
@@ -25,6 +31,10 @@
         } catch (e) {
             console.error("Failed to load OAuth providers:", e);
             error = e.message;
+            // Dispatch title update for error state
+            dispatch("titleupdate", {
+                title: "SIVACOR - Authentication Error",
+            });
         } finally {
             loading = false;
         }
@@ -44,7 +54,7 @@
     function getDocsUrl(path = "") {
         const currentUrl = new URL($page.url);
         // Replace the current subdomain/domain with docs subdomain
-        const docsHost = currentUrl.hostname.replace(/^[^.]*\./, "docs.")
+        const docsHost = currentUrl.hostname.replace(/^[^.]*\./, "docs.");
         const docsUrl = `${currentUrl.protocol}//${docsHost}${currentUrl.port ? `:${currentUrl.port}` : ""}${path}`;
         return docsUrl;
     }

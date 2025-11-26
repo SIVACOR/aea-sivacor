@@ -1,5 +1,6 @@
 <script>
     import { onMount, onDestroy } from "svelte";
+    import { createEventDispatcher } from "svelte";
     import {
         fetchJobDetails,
         cancelJob,
@@ -9,6 +10,8 @@
         downloadFile,
     } from "./api";
     import JobRunner from "./JobRunner.svelte";
+
+    const dispatch = createEventDispatcher();
 
     // Job Status mapping
     const STATUS = {
@@ -101,6 +104,14 @@
 
             jobDetails = details;
             jobStatusText = STATUS[details.status] || "UNKNOWN";
+
+            // Dispatch job state update for title management
+            dispatch("jobstateupdate", {
+                status: jobStatusText,
+                isRunning: isMonitoring,
+                hasError: !!errorMessage,
+                jobId: details._id,
+            });
         } catch (e) {
             console.error("Error fetching job details:", e);
             errorMessage = "Could not fetch job status.";
@@ -142,6 +153,11 @@
         errorMessage = null;
         currentJobId = null;
         latestSubmission = null;
+
+        // Dispatch job reset for title management
+        dispatch("jobreset", {
+            status: "Dashboard",
+        });
     }
 
     async function checkLatestSubmission() {
@@ -183,6 +199,12 @@
         const newJobId = event.detail.jobId;
         currentJobId = newJobId;
         latestSubmission = null;
+
+        // Dispatch job submission for title management
+        dispatch("jobsubmitted", {
+            jobId: newJobId,
+            status: "Submission in Progress",
+        });
     }
 
     function getStatusColor(status) {
@@ -245,11 +267,14 @@
                                         Submission
                                     </div>
                                     <div class="submission-name">
-                                        <a href={getSubmissionFolderUrl(latestSubmission)}
+                                        <a
+                                            href={getSubmissionFolderUrl(
+                                                latestSubmission,
+                                            )}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                         >
-                                        {latestSubmission.name}
+                                            {latestSubmission.name}
                                         </a>
                                     </div>
                                 </div>

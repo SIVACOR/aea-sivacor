@@ -8,6 +8,83 @@
     // A reactive statement to determine if the user is logged in
     $: isAuthenticated = $user !== null;
 
+    // State for tracking current job and submission status
+    let currentJobState = null;
+    let isJobRunning = false;
+    let jobStatusText = null;
+
+    // Reactive title based on authentication and job state
+    $: browserTitle = (() => {
+        if (!isAuthenticated) {
+            return "SIVACOR - Sign In Required";
+        }
+
+        if (isJobRunning && jobStatusText) {
+            if (
+                jobStatusText.includes("Progress") ||
+                jobStatusText.includes("Starting")
+            ) {
+                return "SIVACOR - Submission in Progress";
+            }
+            return `SIVACOR - ${jobStatusText}`;
+        }
+
+        if (currentJobState && currentJobState.status) {
+            const status = currentJobState.status;
+            switch (status) {
+                case "INACTIVE":
+                    return "SIVACOR - Job Inactive";
+                case "QUEUED":
+                    return "SIVACOR - Job Queued";
+                case "RUNNING":
+                    return "SIVACOR - Job Running";
+                case "SUCCESS":
+                    return "SIVACOR - Job Completed Successfully";
+                case "ERROR":
+                    return "SIVACOR - Job Failed";
+                case "CANCELED":
+                    return "SIVACOR - Job Canceled";
+                default:
+                    return `SIVACOR - ${status}`;
+            }
+        }
+
+        return "SIVACOR - Dashboard";
+    })();
+
+    /**
+     * Handle job state updates from JobMonitor component
+     */
+    function handleJobStateUpdate(event) {
+        const { status, isRunning, hasError } = event.detail;
+        currentJobState = {
+            status: status,
+            isRunning: isRunning,
+            hasError: hasError,
+        };
+        isJobRunning = isRunning;
+        if (status) {
+            jobStatusText = status;
+        }
+    }
+
+    /**
+     * Handle job submission events from JobRunner/JobMonitor
+     */
+    function handleJobSubmitted(event) {
+        const { status } = event.detail;
+        isJobRunning = true;
+        jobStatusText = status || "Submission in Progress";
+    }
+
+    /**
+     * Handle title updates from LoginForm component
+     */
+    function handleLoginTitleUpdate(event) {
+        // The LoginForm can override the reactive title temporarily
+        // but the reactive browserTitle will take precedence once state changes
+    }
+
     /**
      * Gets the documentation base URL by replacing the current domain with docs subdomain
      */
@@ -48,6 +125,10 @@
         window.location.href = `mailto:support@sivacor.org?subject=${subject}&body=${body}`;
     }
 </script>
+
+<svelte:head>
+    <title>{browserTitle}</title>
+</svelte:head>
 
 <div class="app-container">
     <header class="app-header md-card">
@@ -106,7 +187,11 @@
 
     <main class="main-content">
         {#if isAuthenticated}
-            <JobMonitor />
+            <JobMonitor
+                on:jobstateupdate={handleJobStateUpdate}
+                on:jobsubmitted={handleJobSubmitted}
+                on:jobreset={handleJobStateUpdate}
+            />
 
             <div class="support-section md-card">
                 <div class="support-header">
@@ -156,7 +241,7 @@
                 </div>
             </div>
         {:else}
-            <LoginForm />
+            <LoginForm on:titleupdate={handleLoginTitleUpdate} />
         {/if}
     </main>
 </div>

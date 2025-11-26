@@ -32,6 +32,10 @@
     });
 </script>
 
+<svelte:head>
+    <title>SIVACOR - Loading</title>
+</svelte:head>
+
 {#if $authLoading}
     <div class="loading-container">
         <div class="loading-content">
