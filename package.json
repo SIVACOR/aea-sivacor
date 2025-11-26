@@ -1,8 +1,9 @@
 {
-	"name": "my-app",
+	"name": "aea-sivacor-web",
 	"private": true,
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"type": "module",
+	"license": "MIT",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
