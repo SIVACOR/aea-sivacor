@@ -121,7 +121,7 @@
             <span class="material-icons file-icon">attach_file</span>
             <div class="file-input-text">
                 <strong>Choose a file</strong> or drag it here
-                <small>Maximum file size: 500MB</small>
+                <small>Maximum file size: 5GB</small>
             </div>
         </label>
     </div>
