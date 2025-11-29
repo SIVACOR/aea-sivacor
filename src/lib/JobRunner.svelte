@@ -34,12 +34,103 @@
 
     const dispatch = createEventDispatcher(); // <-- Initialize
 
+    // Storage keys for persisting user preferences
+    const STORAGE_KEYS = {
+        selectedImage: "sivacor_selected_image",
+        selectedTag: "sivacor_selected_tag",
+        executionFileName: "sivacor_execution_filename",
+    };
+
+    /**
+     * Save user selections to localStorage
+     */
+    function saveUserSelections() {
+        try {
+            if (selectedImage) {
+                localStorage.setItem(STORAGE_KEYS.selectedImage, selectedImage);
+            }
+            if (selectedTag) {
+                localStorage.setItem(STORAGE_KEYS.selectedTag, selectedTag);
+            }
+            if (executionFileName.trim()) {
+                localStorage.setItem(
+                    STORAGE_KEYS.executionFileName,
+                    executionFileName,
+                );
+            }
+        } catch (error) {
+            console.warn(
+                "Failed to save user selections to localStorage:",
+                error,
+            );
+        }
+    }
+
+    /**
+     * Load user selections from localStorage
+     */
+    function loadUserSelections() {
+        try {
+            const savedImage = localStorage.getItem(STORAGE_KEYS.selectedImage);
+            const savedTag = localStorage.getItem(STORAGE_KEYS.selectedTag);
+            const savedFileName = localStorage.getItem(
+                STORAGE_KEYS.executionFileName,
+            );
+
+            // Restore execution file name first as it's independent
+            if (savedFileName && savedFileName.trim()) {
+                executionFileName = savedFileName;
+            }
+
+            // Only restore image if it's available
+            if (savedImage && availableImages.includes(savedImage)) {
+                selectedImage = savedImage;
+            }
+
+            // Tag restoration will be handled by the reactive statement
+            // when availableTags is updated
+        } catch (error) {
+            console.warn(
+                "Failed to load user selections from localStorage:",
+                error,
+            );
+        }
+    }
+
+    /**
+     * Clear saved user selections from localStorage
+     */
+    function clearUserSelections() {
+        try {
+            localStorage.removeItem(STORAGE_KEYS.selectedImage);
+            localStorage.removeItem(STORAGE_KEYS.selectedTag);
+            localStorage.removeItem(STORAGE_KEYS.executionFileName);
+        } catch (error) {
+            console.warn(
+                "Failed to clear user selections from localStorage:",
+                error,
+            );
+        }
+    }
+
     // Reactive statement to update available tags when image selection changes
     $: {
         if (selectedImage && imagesData[selectedImage]) {
+            const previousSelectedTag = selectedTag;
             availableTags = imagesData[selectedImage];
-            // Auto-select first tag if current selection is invalid
-            if (!selectedTag || !availableTags.includes(selectedTag)) {
+
+            // Try to restore saved tag preference for this image
+            const savedTag = localStorage?.getItem?.(STORAGE_KEYS.selectedTag);
+
+            // Prioritize: saved tag (if valid) > previous tag (if valid) > first available
+            if (savedTag && availableTags.includes(savedTag)) {
+                selectedTag = savedTag;
+            } else if (
+                previousSelectedTag &&
+                availableTags.includes(previousSelectedTag)
+            ) {
+                selectedTag = previousSelectedTag;
+            } else {
                 selectedTag = availableTags[0] || null;
             }
         } else {
@@ -48,13 +139,35 @@
         }
     }
 
+    // Reactive statements to save user selections when they change
+    $: if (selectedImage && availableImages.length > 0) {
+        saveUserSelections();
+    }
+
+    $: if (selectedTag && availableTags.length > 0) {
+        saveUserSelections();
+    }
+
+    $: if (executionFileName && executionFileName.trim()) {
+        saveUserSelections();
+    }
+
     onMount(async () => {
         try {
             imagesData = await getImages();
             availableImages = Object.keys(imagesData);
 
             if (availableImages.length > 0) {
-                selectedImage = availableImages[0];
+                // Try to load saved selections first
+                loadUserSelections();
+
+                // If no saved image or saved image is invalid, select first available
+                if (
+                    !selectedImage ||
+                    !availableImages.includes(selectedImage)
+                ) {
+                    selectedImage = availableImages[0];
+                }
                 // selectedTag will be set automatically by the reactive statement above
             }
         } catch (error) {
@@ -63,9 +176,7 @@
         } finally {
             imagesLoading = false;
         }
-    });
-
-    /**
+    }); /**
      * Placeholder function for the FileUploader completion.
      * In a real implementation, FileUploader must be refactored to call this on success.
      * @param {CustomEvent<{fileId: string}>} event - Event containing the new file ID.
