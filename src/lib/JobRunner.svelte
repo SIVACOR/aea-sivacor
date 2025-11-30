@@ -116,22 +116,30 @@
     // Reactive statement to update available tags when image selection changes
     $: {
         if (selectedImage && imagesData[selectedImage]) {
-            const previousSelectedTag = selectedTag;
             availableTags = imagesData[selectedImage];
 
-            // Try to restore saved tag preference for this image
-            const savedTag = localStorage?.getItem?.(STORAGE_KEYS.selectedTag);
+            // If no tag is selected or current tag is invalid for this image
+            if (!selectedTag || !availableTags.includes(selectedTag)) {
+                // Try to restore from localStorage first
+                let newTag = null;
 
-            // Prioritize: saved tag (if valid) > previous tag (if valid) > first available
-            if (savedTag && availableTags.includes(savedTag)) {
-                selectedTag = savedTag;
-            } else if (
-                previousSelectedTag &&
-                availableTags.includes(previousSelectedTag)
-            ) {
-                selectedTag = previousSelectedTag;
-            } else {
-                selectedTag = availableTags[0] || null;
+                try {
+                    const savedTag = localStorage.getItem(
+                        STORAGE_KEYS.selectedTag,
+                    );
+                    if (savedTag && availableTags.includes(savedTag)) {
+                        newTag = savedTag;
+                    }
+                } catch (error) {
+                    // Ignore localStorage errors
+                }
+
+                // If no saved tag or saved tag is invalid, use first available
+                if (!newTag && availableTags.length > 0) {
+                    newTag = availableTags[0];
+                }
+
+                selectedTag = newTag;
             }
         } else {
             availableTags = [];
@@ -151,6 +159,20 @@
     $: if (executionFileName && executionFileName.trim()) {
         saveUserSelections();
     }
+
+    // Computed reactive variable for button text to ensure proper updates
+    $: buttonText =
+        selectedImage && selectedTag
+            ? `${selectedImage}:${selectedTag}`
+            : "Selected Image";
+
+    // Debug logging to track state changes
+    /* $: console.log("JobRunner state:", {
+        selectedImage,
+        selectedTag,
+        availableTags,
+        buttonText,
+    }); */
 
     onMount(async () => {
         try {
@@ -184,7 +206,7 @@
     function handleUploadComplete(event) {
         uploadedFileId = event.detail.fileId;
         jobStatusMessage = `File uploaded! ID: ${uploadedFileId}. Ready to run job.`;
-        console.log("Received uploaded file ID:", uploadedFileId);
+        // console.log("Received uploaded file ID:", uploadedFileId);
     }
 
     async function runJob() {
@@ -347,9 +369,7 @@
                     Processing...
                 {:else}
                     <span class="material-icons">play_arrow</span>
-                    Run with {selectedImage && selectedTag
-                        ? `${selectedImage}:${selectedTag}`
-                        : "Selected Image"}
+                    Run with {buttonText}
                 {/if}
             </button>
         </div>
