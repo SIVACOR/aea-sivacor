@@ -291,14 +291,22 @@ export async function downloadFile(fileId, filename = null) {
  * @param {string} mainFile - The name of the main execution file.
  * @returns {Promise<any>} The response object from the job creation endpoint.
  */
-export async function submitJob(fileId, dropdownValue, mainFile) {
+export async function submitJob(fileId, config) {
     const endpoint = `/sivacor/submit_job`;
+
+    // translate config object to match expected API format
+    // from [{"id": "...", "selectedImage": "...", "selectedTag": "...", "executionFileName":"..."}]
+    // to [{"image_name": "...", "image_tag": "...", "main_file":"..."}]
+    const transformedConfig = config.map(stage => ({
+        image_name: stage.selectedImage,
+        image_tag: stage.selectedTag,
+        main_file: stage.executionFileName
+    }));
 
     // Query arguments for the job API
     const queryArgs = new URLSearchParams({
         id: fileId,
-        image_tag: dropdownValue, // Using a descriptive name for the qarg
-        main_file: mainFile
+        stages: JSON.stringify(transformedConfig)
     });
 
     const response = await api(`${endpoint}?${queryArgs.toString()}`, {

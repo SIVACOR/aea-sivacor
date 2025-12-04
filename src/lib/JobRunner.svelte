@@ -4,17 +4,11 @@
     import { submitJob, getImages } from "./api";
     import FileUploader from "./FileUploader.svelte";
 
-    // State for the dropdowns
-    /** @type {string | null} */
-    let selectedImage = null;
-    /** @type {string | null} */
-    let selectedTag = null;
+    // State for the dropdowns data
     /** @type {Record<string, string[]>} */
     let imagesData = {}; // Object with image names as keys and tag arrays as values
     /** @type {string[]} */
     let availableImages = []; // Array of image names
-    /** @type {string[]} */
-    let availableTags = []; // Array of tags for selected image
     let imagesLoading = true;
 
     // State for the file upload (will hold the ID when upload is done)
@@ -29,16 +23,25 @@
     /** @type {string | null} */
     let jobId = null;
 
-    // State for the execution file name
-    let executionFileName = "main.do";
+    // Flag to prevent saving during initial load
+    let isInitializing = true;
 
-    const dispatch = createEventDispatcher(); // <-- Initialize
+    // Configuration entries array - each entry represents a config row
+    /** @type {Array<{id: string, selectedImage: string | null, selectedTag: string | null, executionFileName: string}>} */
+    let configEntries = [
+        {
+            id: crypto.randomUUID(),
+            selectedImage: null,
+            selectedTag: null,
+            executionFileName: "main.do",
+        },
+    ];
+
+    const dispatch = createEventDispatcher();
 
     // Storage keys for persisting user preferences
     const STORAGE_KEYS = {
-        selectedImage: "sivacor_selected_image",
-        selectedTag: "sivacor_selected_tag",
-        executionFileName: "sivacor_execution_filename",
+        configEntries: "sivacor_config_entries",
     };
 
     /**
@@ -46,18 +49,16 @@
      */
     function saveUserSelections() {
         try {
-            if (selectedImage) {
-                localStorage.setItem(STORAGE_KEYS.selectedImage, selectedImage);
-            }
-            if (selectedTag) {
-                localStorage.setItem(STORAGE_KEYS.selectedTag, selectedTag);
-            }
-            if (executionFileName.trim()) {
-                localStorage.setItem(
-                    STORAGE_KEYS.executionFileName,
-                    executionFileName,
-                );
-            }
+            // Save the entire config entries array
+            const configToSave = configEntries.map((entry) => ({
+                selectedImage: entry.selectedImage,
+                selectedTag: entry.selectedTag,
+                executionFileName: entry.executionFileName,
+            }));
+            localStorage.setItem(
+                STORAGE_KEYS.configEntries,
+                JSON.stringify(configToSave),
+            );
         } catch (error) {
             console.warn(
                 "Failed to save user selections to localStorage:",
@@ -71,24 +72,29 @@
      */
     function loadUserSelections() {
         try {
-            const savedImage = localStorage.getItem(STORAGE_KEYS.selectedImage);
-            const savedTag = localStorage.getItem(STORAGE_KEYS.selectedTag);
-            const savedFileName = localStorage.getItem(
-                STORAGE_KEYS.executionFileName,
+            const savedConfigData = localStorage.getItem(
+                STORAGE_KEYS.configEntries,
             );
-
-            // Restore execution file name first as it's independent
-            if (savedFileName && savedFileName.trim()) {
-                executionFileName = savedFileName;
+            if (savedConfigData) {
+                const parsedConfigs = JSON.parse(savedConfigData);
+                if (Array.isArray(parsedConfigs) && parsedConfigs.length > 0) {
+                    // Restore config entries with validation
+                    configEntries = parsedConfigs.map((config) => ({
+                        id: crypto.randomUUID(), // Generate new IDs
+                        selectedImage:
+                            config.selectedImage &&
+                            availableImages.includes(config.selectedImage)
+                                ? config.selectedImage
+                                : null,
+                        selectedTag: config.selectedTag || null,
+                        executionFileName:
+                            config.executionFileName || "main.do",
+                    }));
+                    console.log("Restored config entries:", configEntries);
+                }
+            } else {
+                console.log("No saved config entries found in localStorage");
             }
-
-            // Only restore image if it's available
-            if (savedImage && availableImages.includes(savedImage)) {
-                selectedImage = savedImage;
-            }
-
-            // Tag restoration will be handled by the reactive statement
-            // when availableTags is updated
         } catch (error) {
             console.warn(
                 "Failed to load user selections from localStorage:",
@@ -102,9 +108,7 @@
      */
     function clearUserSelections() {
         try {
-            localStorage.removeItem(STORAGE_KEYS.selectedImage);
-            localStorage.removeItem(STORAGE_KEYS.selectedTag);
-            localStorage.removeItem(STORAGE_KEYS.executionFileName);
+            localStorage.removeItem(STORAGE_KEYS.configEntries);
         } catch (error) {
             console.warn(
                 "Failed to clear user selections from localStorage:",
@@ -113,66 +117,13 @@
         }
     }
 
-    // Reactive statement to update available tags when image selection changes
-    $: {
-        if (selectedImage && imagesData[selectedImage]) {
-            availableTags = imagesData[selectedImage];
-
-            // If no tag is selected or current tag is invalid for this image
-            if (!selectedTag || !availableTags.includes(selectedTag)) {
-                // Try to restore from localStorage first
-                let newTag = null;
-
-                try {
-                    const savedTag = localStorage.getItem(
-                        STORAGE_KEYS.selectedTag,
-                    );
-                    if (savedTag && availableTags.includes(savedTag)) {
-                        newTag = savedTag;
-                    }
-                } catch (error) {
-                    // Ignore localStorage errors
-                }
-
-                // If no saved tag or saved tag is invalid, use first available
-                if (!newTag && availableTags.length > 0) {
-                    newTag = availableTags[0];
-                }
-
-                selectedTag = newTag;
-            }
-        } else {
-            availableTags = [];
-            selectedTag = null;
-        }
-    }
-
     // Reactive statements to save user selections when they change
-    $: if (selectedImage && availableImages.length > 0) {
+    $: if (configEntries && configEntries.length > 0 && !isInitializing) {
         saveUserSelections();
     }
 
-    $: if (selectedTag && availableTags.length > 0) {
-        saveUserSelections();
-    }
-
-    $: if (executionFileName && executionFileName.trim()) {
-        saveUserSelections();
-    }
-
-    // Computed reactive variable for button text to ensure proper updates
-    $: buttonText =
-        selectedImage && selectedTag
-            ? `${selectedImage}:${selectedTag}`
-            : "Selected Image";
-
-    // Debug logging to track state changes
-    /* $: console.log("JobRunner state:", {
-        selectedImage,
-        selectedTag,
-        availableTags,
-        buttonText,
-    }); */
+    // Computed reactive variable for button text
+    $: firstEntry = configEntries[0];
 
     onMount(async () => {
         try {
@@ -183,30 +134,102 @@
                 // Try to load saved selections first
                 loadUserSelections();
 
-                // If no saved image or saved image is invalid, select first available
-                if (
-                    !selectedImage ||
-                    !availableImages.includes(selectedImage)
-                ) {
-                    selectedImage = availableImages[0];
+                // If no entries were loaded, ensure we have at least one with a default image
+                if (configEntries.length === 0) {
+                    configEntries = [
+                        {
+                            id: crypto.randomUUID(),
+                            selectedImage: availableImages[0],
+                            selectedTag: null,
+                            executionFileName: "main.do",
+                        },
+                    ];
                 }
-                // selectedTag will be set automatically by the reactive statement above
+
+                // Set tags for entries that have images but no tags
+                configEntries.forEach((entry) => {
+                    if (
+                        entry.selectedImage &&
+                        imagesData[entry.selectedImage] &&
+                        !entry.selectedTag
+                    ) {
+                        const availableTags = imagesData[entry.selectedImage];
+                        if (availableTags.length > 0) {
+                            entry.selectedTag = availableTags[0];
+                        }
+                    }
+                });
+                configEntries = [...configEntries]; // Trigger reactivity
             }
         } catch (error) {
             console.error("Failed to load available images:", error);
             jobErrorMessage = "Failed to load available images.";
         } finally {
             imagesLoading = false;
+            isInitializing = false; // Allow saving after initialization is complete
         }
     }); /**
      * Placeholder function for the FileUploader completion.
      * In a real implementation, FileUploader must be refactored to call this on success.
      * @param {CustomEvent<{fileId: string}>} event - Event containing the new file ID.
      */
+    /**
+     * @param {any} event - The upload complete event
+     */
     function handleUploadComplete(event) {
         uploadedFileId = event.detail.fileId;
         jobStatusMessage = `File uploaded! ID: ${uploadedFileId}. Ready to run job.`;
-        // console.log("Received uploaded file ID:", uploadedFileId);
+    }
+
+    /**
+     * Add a new configuration entry
+     */
+    function addConfigEntry() {
+        configEntries = [
+            ...configEntries,
+            {
+                id: crypto.randomUUID(),
+                selectedImage: null,
+                selectedTag: null,
+                executionFileName: "main.do",
+            },
+        ];
+        // Saving will be triggered by the reactive statement
+    }
+
+    /**
+     * Remove a configuration entry
+     * @param {string} entryId - The ID of the entry to remove
+     */
+    function removeConfigEntry(entryId) {
+        // Always keep at least one entry
+        if (configEntries.length > 1) {
+            configEntries = configEntries.filter(
+                (entry) => entry.id !== entryId,
+            );
+            // Saving will be triggered by the reactive statement
+        }
+    }
+
+    /**
+     * Update available tags for a specific config entry when its image selection changes
+     * @param {string} entryId - The ID of the entry
+     * @param {string | null} selectedImage - The selected image
+     */
+    function updateEntryTags(entryId, selectedImage) {
+        const entry = configEntries.find((e) => e.id === entryId);
+        if (entry && selectedImage && imagesData[selectedImage]) {
+            const availableTagsForImage = imagesData[selectedImage];
+
+            // If current tag is not valid for this image, reset to first available
+            if (
+                !entry.selectedTag ||
+                !availableTagsForImage.includes(entry.selectedTag)
+            ) {
+                entry.selectedTag = availableTagsForImage[0] || null;
+                configEntries = [...configEntries]; // Trigger reactivity and save
+            }
+        }
     }
 
     async function runJob() {
@@ -215,34 +238,39 @@
             return;
         }
 
-        if (!executionFileName.trim()) {
+        const firstEntry = configEntries[0];
+        if (!firstEntry) {
+            jobErrorMessage = "No configuration available.";
+            return;
+        }
+
+        if (!firstEntry.executionFileName.trim()) {
             jobErrorMessage = "Please specify an execution file name.";
             return;
         }
 
-        if (!selectedImage || !selectedTag) {
+        if (!firstEntry.selectedImage || !firstEntry.selectedTag) {
             jobErrorMessage = "Please select both an image and a tag.";
             return;
         }
 
         isJobRunning = true;
         jobErrorMessage = null;
-        const fullImageName = `${selectedImage}:${selectedTag}`;
-        jobStatusMessage = `Starting job for image: ${fullImageName} with file: ${executionFileName}...`;
+        const fullImageName = `${firstEntry.selectedImage}:${firstEntry.selectedTag}`;
+        jobStatusMessage = `Starting job for image: ${fullImageName} with file: ${firstEntry.executionFileName}...`;
 
         try {
             const jobResponse = await submitJob(
                 uploadedFileId,
-                fullImageName,
-                executionFileName,
+                configEntries
             );
-            jobId = jobResponse._id || "N/A"; // Assuming the response contains a job ID
+            jobId = jobResponse._id || "N/A";
             jobStatusMessage = `Job successfully started! Job ID: ${jobId}`;
             dispatch("jobsubmitted", {
                 jobId: jobId,
-                executionFile: executionFileName,
-                image: selectedImage,
-                tag: selectedTag,
+                executionFile: firstEntry.executionFileName,
+                image: firstEntry.selectedImage,
+                tag: firstEntry.selectedTag,
                 fullImage: fullImageName,
             });
         } catch (error) {
@@ -270,96 +298,145 @@
         <FileUploader on:uploadcomplete={handleUploadComplete} />
 
         <div class="divider">
-            <span class="divider-text">Configuration</span>
+            <span class="divider-text">Replication Workflow</span>
         </div>
 
         <div class="config-section">
-            <div class="input-group">
-                <label for="image-select">
-                    <span class="material-icons label-icon">settings</span>
-                    Docker Image
-                </label>
-                {#if imagesLoading}
-                    <div class="loading-state">
-                        <div class="md-spinner"></div>
-                        <span>Loading available images...</span>
-                    </div>
-                {:else if availableImages.length > 0}
-                    <select
-                        id="image-select"
-                        bind:value={selectedImage}
-                        disabled={isJobRunning}
-                    >
-                        {#each availableImages as image (image)}
-                            <option value={image}>{image}</option>
-                        {/each}
-                    </select>
-                {:else}
-                    <div class="error-state">
-                        <span class="material-icons">warning</span>
-                        <span>No processing images available</span>
-                    </div>
-                {/if}
-            </div>
+            {#each configEntries as entry, index (entry.id)}
+                <div class="config-row">
+                    <h4>Step {index + 1}</h4>
+                    <div class="config-widgets">
+                        <!-- Docker Image Selection -->
+                        <div class="input-group">
+                            <label for="image-select-{entry.id}">
+                                <span class="material-icons label-icon"
+                                    >settings</span
+                                >
+                                Docker Image
+                            </label>
+                            {#if imagesLoading}
+                                <div class="loading-state">
+                                    <div class="md-spinner"></div>
+                                    <span>Loading...</span>
+                                </div>
+                            {:else if availableImages.length > 0}
+                                <select
+                                    id="image-select-{entry.id}"
+                                    bind:value={entry.selectedImage}
+                                    on:change={() =>
+                                        entry.selectedImage &&
+                                        updateEntryTags(
+                                            entry.id,
+                                            entry.selectedImage,
+                                        )}
+                                    disabled={isJobRunning}
+                                >
+                                    <option value={null}>Select Image</option>
+                                    {#each availableImages as image (image)}
+                                        <option value={image}>{image}</option>
+                                    {/each}
+                                </select>
+                            {:else}
+                                <div class="error-state">
+                                    <span class="material-icons">warning</span>
+                                    <span>No images available</span>
+                                </div>
+                            {/if}
+                        </div>
 
-            <div class="input-group">
-                <label for="tag-select">
-                    <span class="material-icons label-icon">local_offer</span>
-                    Image Tag
-                </label>
-                {#if imagesLoading}
-                    <div class="loading-state">
-                        <div class="md-spinner"></div>
-                        <span>Loading available tags...</span>
-                    </div>
-                {:else if availableTags.length > 0}
-                    <select
-                        id="tag-select"
-                        bind:value={selectedTag}
-                        disabled={isJobRunning || !selectedImage}
-                    >
-                        {#each availableTags as tag (tag)}
-                            <option value={tag}>{tag}</option>
-                        {/each}
-                    </select>
-                {:else if selectedImage}
-                    <div class="error-state">
-                        <span class="material-icons">warning</span>
-                        <span>No tags available for selected image</span>
-                    </div>
-                {:else}
-                    <select disabled class="disabled-select">
-                        <option>Select an image first</option>
-                    </select>
-                {/if}
-            </div>
+                        <!-- Image Tag Selection -->
+                        <div class="input-group">
+                            <label for="tag-select-{entry.id}">
+                                <span class="material-icons label-icon"
+                                    >local_offer</span
+                                >
+                                Image Tag
+                            </label>
+                            {#if imagesLoading}
+                                <div class="loading-state">
+                                    <div class="md-spinner"></div>
+                                    <span>Loading...</span>
+                                </div>
+                            {:else if entry.selectedImage && imagesData[entry.selectedImage]?.length > 0}
+                                <select
+                                    id="tag-select-{entry.id}"
+                                    bind:value={entry.selectedTag}
+                                    disabled={isJobRunning ||
+                                        !entry.selectedImage}
+                                >
+                                    {#each imagesData[entry.selectedImage] as tag (tag)}
+                                        <option value={tag}>{tag}</option>
+                                    {/each}
+                                </select>
+                            {:else if entry.selectedImage}
+                                <div class="error-state">
+                                    <span class="material-icons">warning</span>
+                                    <span>No tags available</span>
+                                </div>
+                            {:else}
+                                <select disabled class="disabled-select">
+                                    <option>Select an image first</option>
+                                </select>
+                            {/if}
+                        </div>
 
-            <div class="input-group">
-                <label for="execution-file">
-                    <span class="material-icons label-icon">code</span>
-                    Main Filename
-                </label>
-                <input
-                    type="text"
-                    id="execution-file"
-                    bind:value={executionFileName}
-                    disabled={isJobRunning}
-                    placeholder="Enter main file name (e.g., main.do, main.R)"
-                    class="file-input"
-                />
-                <div class="input-hint">
-                    <span class="material-icons hint-icon">lightbulb</span>
-                    Common values: <code>main.do</code> for Stata,
-                    <code>main.R</code> for R
+                        <!-- Main Filename -->
+                        <div class="input-group">
+                            <label for="execution-file-{entry.id}">
+                                <span class="material-icons label-icon"
+                                    >code</span
+                                >
+                                Main Filename
+                            </label>
+                            <input
+                                type="text"
+                                id="execution-file-{entry.id}"
+                                bind:value={entry.executionFileName}
+                                disabled={isJobRunning}
+                                placeholder="e.g., main.do, main.R"
+                                class="file-input"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Remove button (only show if more than one entry) -->
+                    {#if configEntries.length > 1}
+                        <button
+                            type="button"
+                            class="remove-config-btn"
+                            on:click={() => removeConfigEntry(entry.id)}
+                            disabled={isJobRunning}
+                            title="Remove this configuration"
+                        >
+                            <span class="material-icons">remove</span>
+                        </button>
+                    {/if}
                 </div>
+            {/each}
+
+            <!-- Add button -->
+            <button
+                type="button"
+                class="add-config-btn"
+                on:click={addConfigEntry}
+                disabled={isJobRunning}
+            >
+                <span class="material-icons">add</span>
+                Add Step
+            </button>
+
+            <div class="input-hint">
+                <span class="material-icons hint-icon">lightbulb</span>
+                Common values: <code>main.do</code> for Stata,
+                <code>main.R</code> for R
             </div>
 
             <button
                 on:click={runJob}
                 disabled={!uploadedFileId ||
-                    !executionFileName.trim() ||
-                    !selectedImage ||
-                    !selectedTag ||
+                    !firstEntry?.executionFileName?.trim() ||
+                    !firstEntry?.selectedImage ||
+                    !firstEntry?.selectedTag ||
                     isJobRunning}
                 class="run-button"
                 class:running={isJobRunning}
@@ -369,7 +446,7 @@
                     Processing...
                 {:else}
                     <span class="material-icons">play_arrow</span>
-                    Run with {buttonText}
+                    Run Replication Workflow
                 {/if}
             </button>
         </div>
@@ -460,10 +537,29 @@
         gap: var(--md-spacing-lg);
     }
 
+    .config-row {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--md-spacing-md);
+        padding: var(--md-spacing-md);
+        border: 1px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-md);
+        background: var(--md-surface-container-lowest);
+    }
+
+    .config-widgets {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: var(--md-spacing-md);
+        flex: 1;
+        align-items: start;
+    }
+
     .input-group {
         display: flex;
         flex-direction: column;
-        gap: var(--md-spacing-sm);
+        gap: var(--md-spacing-xs);
+        min-width: 0; /* Allow shrinking */
     }
 
     .input-group label {
@@ -601,6 +697,68 @@
         transform: none !important;
     }
 
+    .add-config-btn {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        background: var(--md-secondary-container);
+        color: var(--md-on-secondary-container);
+        border: none;
+        border-radius: var(--md-radius-full);
+        font-size: var(--md-font-body2);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        align-self: flex-start;
+    }
+
+    .add-config-btn:hover:not(:disabled) {
+        background: var(--md-secondary-container);
+        box-shadow: var(--md-elevation-1);
+        transform: translateY(-1px);
+    }
+
+    .add-config-btn:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: none;
+    }
+
+    .add-config-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .remove-config-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        background: var(--md-error-container);
+        color: var(--md-on-error-container);
+        border: none;
+        border-radius: var(--md-radius-full);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .remove-config-btn:hover:not(:disabled) {
+        background: var(--md-error);
+        color: var(--md-on-error);
+        transform: scale(1.1);
+    }
+
+    .remove-config-btn:active:not(:disabled) {
+        transform: scale(0.95);
+    }
+
+    .remove-config-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
     .status-banner {
         display: flex;
         align-items: flex-start;
@@ -666,6 +824,21 @@
         .status-banner {
             flex-direction: column;
             text-align: center;
+        }
+
+        .config-widgets {
+            grid-template-columns: 1fr;
+            gap: var(--md-spacing-sm);
+        }
+
+        .config-row {
+            flex-direction: column;
+            gap: var(--md-spacing-sm);
+        }
+
+        .remove-config-btn {
+            align-self: center;
+            margin-top: var(--md-spacing-sm);
         }
     }
 </style>
