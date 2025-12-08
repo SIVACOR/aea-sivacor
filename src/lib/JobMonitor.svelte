@@ -8,6 +8,8 @@
         getLatestSubmission,
         getSubmissionFolderUrl,
         downloadFile,
+        getGirderToken,
+        getGirderUrl,
     } from "./api";
     import JobRunner from "./JobRunner.svelte";
 
@@ -32,6 +34,17 @@
     let currentJobId = null;
     let checkingLatestSubmission = true;
     let latestSubmission = null;
+
+    // WebSocket logs state
+    let websocket = null;
+    let isLogsVisible = false;
+    let streamingLogs = [];
+    let isConnectingToLogs = false;
+    let logsConnectionError = null;
+    let logsContainerElement = null; // Reference to the logs container for scrolling
+
+    // Log management constants
+    const MAX_LOG_ENTRIES = 1000;
 
     $: showRunner = !isMonitoring && !currentJobId && !checkingLatestSubmission;
 
@@ -62,6 +75,184 @@
             }
         }
         return files;
+    }
+
+    /**
+     * Adds a log entry while maintaining the maximum log limit
+     */
+    function addLogEntry(logEntry) {
+        streamingLogs.push(logEntry);
+        if (streamingLogs.length > MAX_LOG_ENTRIES) {
+            streamingLogs.shift();
+        }
+        // Reassign to trigger Svelte reactivity
+        streamingLogs = streamingLogs;
+    }
+
+    /**
+     * Clears all streaming logs
+     */
+    function clearLogs() {
+        streamingLogs = [];
+    }
+
+    /**
+     * Scrolls the logs container to the bottom
+     */
+    function scrollLogsToBottom() {
+        if (logsContainerElement && isLogsVisible) {
+            setTimeout(() => {
+                logsContainerElement.scrollTop =
+                    logsContainerElement.scrollHeight;
+            }, 0);
+        }
+    }
+
+    async function connectToLogs() {
+        try {
+            isConnectingToLogs = true;
+            logsConnectionError = null;
+
+            const token = getGirderToken();
+            const girderUrl = getGirderUrl();
+
+            if (!token || !girderUrl) {
+                throw new Error("Authentication required");
+            }
+
+            // Convert HTTP URL to WebSocket URL
+            const wsUrl = girderUrl.replace(
+                /^https?:/,
+                girderUrl.startsWith("https:") ? "wss:" : "ws:",
+            );
+            const websocketUrl = `${wsUrl}/logs/docker?token=${encodeURIComponent(token)}`;
+
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+            }
+            websocket = new WebSocket(websocketUrl);
+            const ws = websocket;
+
+            ws.onopen = () => {
+                console.log("WebSocket connection established for logs");
+                // Check if disconnect was called during connection attempt
+                if (!isConnectingToLogs) {
+                    // Connection was cancelled, close immediately
+                    ws.close();
+                    if (websocket === ws) {
+                        websocket = null;
+                    }
+                    return;
+                }
+                isConnectingToLogs = false;
+            };
+
+            ws.onmessage = async (event) => {
+                try {
+                    // Handle Blob data by converting to text
+                    let messageData;
+                    if (event.data instanceof Blob) {
+                        messageData = await event.data.text();
+                    } else {
+                        messageData = event.data;
+                    }
+
+                    // Function to extract timestamp and message from log string
+                    const parseLogMessage = (logString) => {
+                        // Check if message starts with ISO timestamp pattern
+                        const timestampRegex =
+                            /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s*(.*)/;
+                        const match = logString.match(timestampRegex);
+
+                        if (match) {
+                            return {
+                                timestamp: match[1],
+                                message: (match[2].trim() || logString),
+                            };
+                        }
+
+                        return {
+                            timestamp: new Date().toISOString(),
+                            message: logString,
+                        };
+                    };
+
+                    // Try to parse as JSON first
+                    try {
+                        const logData = JSON.parse(messageData);
+                        const parsed = parseLogMessage(
+                            logData.message || messageData,
+                        );
+                        const logEntry = {
+                            timestamp: parsed.timestamp,
+                            message: parsed.message,
+                            level: logData.level || "info",
+                        };
+                        addLogEntry(logEntry);
+                    } catch (jsonError) {
+                        // If not JSON, treat as plain text and parse timestamp
+                        const parsed = parseLogMessage(messageData);
+                        const logEntry = {
+                            timestamp: parsed.timestamp,
+                            message: parsed.message,
+                            level: "info",
+                        };
+                        addLogEntry(logEntry);
+                    }
+
+                    // Auto-scroll to bottom if logs are visible
+                    scrollLogsToBottom();
+                } catch (error) {
+                    console.error("Error processing log message:", error);
+                }
+            };
+
+            websocket.onerror = (error) => {
+                console.error("WebSocket error:", error);
+                logsConnectionError = "Failed to connect to log stream";
+                isConnectingToLogs = false;
+                if (websocket) {
+                    websocket.close();
+                    websocket = null;
+                }
+            };
+
+            websocket.onclose = () => {
+                console.log("WebSocket connection closed");
+                websocket = null;
+                isConnectingToLogs = false;
+            };
+        } catch (error) {
+            console.error("Error connecting to logs:", error);
+            logsConnectionError = error.message;
+            isConnectingToLogs = false;
+        }
+    }
+
+    function disconnectFromLogs() {
+        // Cancel any ongoing connection attempt
+        if (isConnectingToLogs) {
+            isConnectingToLogs = false;
+        }
+
+        // Close existing WebSocket connection
+        if (websocket) {
+            websocket.close();
+            websocket = null;
+        }
+
+        clearLogs();
+        logsConnectionError = null;
+    }
+
+    function toggleLogsVisibility() {
+        isLogsVisible = !isLogsVisible;
+
+        // Connect to logs when first opened during an active job
+        if (isLogsVisible && isJobActive && !websocket && !isConnectingToLogs) {
+            connectToLogs();
+        }
     }
 
     async function handleFileDownload(fileId, filename) {
@@ -125,6 +316,11 @@
         pollIntervalId = setInterval(() => {
             checkJobStatus(jobId);
         }, JOB_POLLING_INTERVAL);
+
+        // Auto-connect to logs if logs are visible
+        if (isLogsVisible && !websocket && !isConnectingToLogs) {
+            connectToLogs();
+        }
     }
 
     function stopPolling() {
@@ -133,6 +329,9 @@
             pollIntervalId = null;
         }
         isMonitoring = false;
+
+        // Disconnect from logs when job is no longer active
+        disconnectFromLogs();
     }
 
     async function handleCancel() {
@@ -148,11 +347,15 @@
 
     function resetJob() {
         stopPolling();
+        disconnectFromLogs();
         jobDetails = null;
         jobStatusText = null;
         errorMessage = null;
         currentJobId = null;
         latestSubmission = null;
+        isLogsVisible = false;
+        streamingLogs = [];
+        logsConnectionError = null;
 
         // Dispatch job reset for title management
         dispatch("jobreset", {
@@ -181,7 +384,10 @@
         checkLatestSubmission();
     });
 
-    onDestroy(stopPolling);
+    onDestroy(() => {
+        stopPolling();
+        disconnectFromLogs();
+    });
 
     // Use a separate variable to track when we should start polling
     let shouldPoll = false;
@@ -318,6 +524,105 @@
                             <span class="material-icons">stop</span>
                             Cancel Job
                         </button>
+                    </div>
+
+                    <!-- Live Logs Section -->
+                    <div class="live-logs-section">
+                        <button
+                            class="logs-toggle-button"
+                            on:click={toggleLogsVisibility}
+                            type="button"
+                            aria-expanded={isLogsVisible}
+                        >
+                            <span
+                                class="material-icons logs-toggle-icon"
+                                class:expanded={isLogsVisible}
+                            >
+                                {isLogsVisible ? "expand_less" : "expand_more"}
+                            </span>
+                            <span class="logs-toggle-text">
+                                Live Container Logs
+                                {#if streamingLogs.length > 0}
+                                    <span class="logs-count"
+                                        >({streamingLogs.length})</span
+                                    >
+                                {/if}
+                            </span>
+                            {#if isConnectingToLogs}
+                                <div class="mini-spinner"></div>
+                            {/if}
+                        </button>
+
+                        <!-- Clear Logs Button -->
+                        {#if isLogsVisible && streamingLogs.length > 0}
+                            <button
+                                class="clear-logs-button"
+                                on:click={clearLogs}
+                                type="button"
+                                title="Clear all logs"
+                            >
+                                <span class="material-icons">clear_all</span>
+                                <span>Clear Logs</span>
+                            </button>
+                        {/if}
+
+                        {#if isLogsVisible}
+                            <div class="logs-content">
+                                {#if logsConnectionError}
+                                    <div class="logs-error">
+                                        <span class="material-icons">error</span
+                                        >
+                                        <span>{logsConnectionError}</span>
+                                        <button
+                                            class="retry-logs-button"
+                                            on:click={connectToLogs}
+                                            disabled={isConnectingToLogs}
+                                        >
+                                            Retry
+                                        </button>
+                                    </div>
+                                {:else if streamingLogs.length === 0 && !isConnectingToLogs}
+                                    <div class="logs-empty">
+                                        <span class="material-icons"
+                                            >hourglass_empty</span
+                                        >
+                                        <span
+                                            >Waiting for container logs...</span
+                                        >
+                                    </div>
+                                {:else}
+                                    <div
+                                        class="streaming-logs-container"
+                                        role="log"
+                                        aria-live="off"
+                                        bind:this={logsContainerElement}
+                                    >
+                                        {#each streamingLogs as log, index (log.timestamp + "-" + index)}
+                                            <div
+                                                class="log-entry"
+                                                data-level={log.level}
+                                            >
+                                                <span class="log-timestamp">
+                                                    {(() => {
+                                                        const date = new Date(
+                                                            log.timestamp,
+                                                        );
+                                                        return isNaN(
+                                                            date.getTime(),
+                                                        )
+                                                            ? "N/A"
+                                                            : date.toLocaleTimeString();
+                                                    })()}
+                                                </span>
+                                                <span class="log-message"
+                                                    >{log.message}</span
+                                                >
+                                            </div>
+                                        {/each}
+                                    </div>
+                                {/if}
+                            </div>
+                        {/if}
                     </div>
                 {:else if jobDetails.status === 3}
                     <!-- SUCCESS -->
@@ -610,6 +915,177 @@
         color: var(--md-on-surface-variant) !important;
     }
 
+    .live-logs-section {
+        border: 1px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-sm);
+        background-color: var(--md-surface);
+        overflow: hidden;
+    }
+
+    .logs-toggle-button {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-md);
+        background: transparent;
+        border: none;
+        text-align: left;
+        font-weight: 500;
+        color: var(--md-on-surface);
+        cursor: pointer;
+        transition: background-color var(--md-transition-standard);
+    }
+
+    .logs-toggle-button:hover {
+        background-color: var(--md-surface-variant);
+    }
+
+    .logs-toggle-icon {
+        color: var(--md-primary);
+        transition: transform var(--md-transition-standard);
+    }
+
+    .logs-toggle-icon.expanded {
+        transform: rotate(0deg);
+    }
+
+    .logs-toggle-text {
+        flex: 1;
+    }
+
+    .logs-count {
+        color: var(--md-on-surface-variant);
+        font-size: var(--md-font-caption);
+        font-weight: normal;
+    }
+
+    .mini-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--md-outline-variant);
+        border-top: 2px solid var(--md-primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .clear-logs-button {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        margin: var(--md-spacing-sm) var(--md-spacing-md) 0;
+        background-color: var(--md-surface-variant);
+        border: 1px solid var(--md-outline-variant);
+        border-radius: var(--md-border-radius);
+        color: var(--md-on-surface-variant);
+        font-size: var(--md-font-caption);
+        cursor: pointer;
+        transition: all var(--md-transition-standard);
+    }
+
+    .clear-logs-button:hover {
+        background-color: var(--md-secondary-container);
+        color: var(--md-on-secondary-container);
+        border-color: var(--md-secondary);
+    }
+
+    .clear-logs-button .material-icons {
+        font-size: 16px;
+    }
+
+    .logs-content {
+        border-top: 1px solid var(--md-outline-variant);
+        background-color: var(--md-surface-container-lowest);
+    }
+
+    :root {
+        --md-logs-background: #1a1a1a;
+        --md-logs-text: #e0e0e0;
+    }
+
+    .streaming-logs-container {
+        max-height: 400px;
+        overflow-y: auto;
+        padding: var(--md-spacing-sm);
+        background-color: var(--md-logs-background);
+        color: var(--md-logs-text);
+        font-family: "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+
+    .log-entry {
+        display: flex;
+        gap: var(--md-spacing-sm);
+        padding: 2px 0;
+        border-bottom: 1px solid transparent;
+    }
+
+    .log-entry[data-level="error"] {
+        color: #ff6b6b;
+    }
+
+    .log-entry[data-level="warn"] {
+        color: #ffa726;
+    }
+
+    .log-entry[data-level="info"] {
+        color: #66bb6a;
+    }
+
+    .log-timestamp {
+        color: #9e9e9e;
+        font-size: 11px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        min-width: 80px;
+    }
+
+    .log-message {
+        white-space: pre-wrap;
+        word-break: break-word;
+        flex: 1;
+    }
+
+    .logs-error {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-md);
+        background-color: rgba(var(--md-error-rgb), 0.1);
+        color: var(--md-error);
+        border: 1px solid rgba(var(--md-error-rgb), 0.3);
+        margin: var(--md-spacing-sm);
+        border-radius: var(--md-radius-xs);
+    }
+
+    .logs-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-xl);
+        color: var(--md-on-surface-variant);
+        font-style: italic;
+    }
+
+    .retry-logs-button {
+        padding: var(--md-spacing-xs) var(--md-spacing-sm);
+        background-color: var(--md-error);
+        color: white;
+        border: none;
+        border-radius: var(--md-radius-xs);
+        font-size: var(--md-font-caption);
+        cursor: pointer;
+        margin-left: auto;
+    }
+
+    .retry-logs-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
     .result-section {
         padding: var(--md-spacing-lg);
         border-radius: var(--md-radius-sm);
@@ -847,6 +1323,15 @@
         }
     }
 
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
     @media (max-width: 768px) {
         .job-header {
             flex-direction: column;
@@ -871,6 +1356,21 @@
         .file-card {
             flex-direction: column;
             gap: var(--md-spacing-sm);
+            text-align: center;
+        }
+
+        .streaming-logs-container {
+            max-height: 300px;
+            font-size: 12px;
+        }
+
+        .log-timestamp {
+            min-width: 70px;
+            font-size: 10px;
+        }
+
+        .logs-error {
+            flex-direction: column;
             text-align: center;
         }
     }
