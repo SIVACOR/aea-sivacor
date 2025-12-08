@@ -71,7 +71,7 @@ export function setAuthToken(token) {
  * Retrieves the authentication token from either the cookie or localStorage.
  * @returns {string | null} The 'Girder-Token' or null.
  */
-function getAuthToken() {
+export function getGirderToken() {
     const token = Cookies.get('girderToken') || localStorage.getItem('girderToken');
     return token;
 }
@@ -93,14 +93,6 @@ export function clearAuthToken() {
 }
 
 /**
- * Retrieves the authentication token for WebSocket connections.
- * @returns {string|null} The 'Girder-Token' or null if not available.
- */
-export function getGirderToken() {
-    return getAuthToken();
-}
-
-/**
  * Gets the base Girder URL for WebSocket connections.
  * @returns {string} The base Girder URL.
  */
@@ -115,7 +107,7 @@ export function getGirderUrl() {
  * @returns {Promise<any>} The parsed JSON response.
  */
 export async function api(endpoint, options = {}) {
-    const token = getAuthToken();
+    const token = getGirderToken();
     const headers = {
         'Content-Type': 'application/json',
         ...options.headers
@@ -242,7 +234,7 @@ export async function downloadFile(fileId, filename = null) {
         throw new Error("File ID must be provided.");
     }
 
-    const token = getAuthToken();
+    const token = getGirderToken();
     const headers = {};
 
     if (token) {

@@ -81,12 +81,12 @@
      * Adds a log entry while maintaining the maximum log limit
      */
     function addLogEntry(logEntry) {
-        streamingLogs = [...streamingLogs, logEntry];
-
-        // Keep only the last MAX_LOG_ENTRIES
+        streamingLogs.push(logEntry);
         if (streamingLogs.length > MAX_LOG_ENTRIES) {
-            streamingLogs = streamingLogs.slice(-MAX_LOG_ENTRIES);
+            streamingLogs.shift();
         }
+        // Reassign to trigger Svelte reactivity
+        streamingLogs = streamingLogs;
     }
 
     /**
@@ -113,7 +113,7 @@
             isConnectingToLogs = true;
             logsConnectionError = null;
 
-            const token = await getGirderToken();
+            const token = getGirderToken();
             const girderUrl = getGirderUrl();
 
             if (!token || !girderUrl) {
@@ -132,20 +132,23 @@
                 websocket = null;
             }
             websocket = new WebSocket(websocketUrl);
+            const ws = websocket;
 
-            websocket.onopen = () => {
+            ws.onopen = () => {
                 console.log("WebSocket connection established for logs");
                 // Check if disconnect was called during connection attempt
                 if (!isConnectingToLogs) {
                     // Connection was cancelled, close immediately
-                    websocket?.close();
-                    websocket = null;
+                    ws.close();
+                    if (websocket === ws) {
+                        websocket = null;
+                    }
                     return;
                 }
                 isConnectingToLogs = false;
             };
 
-            websocket.onmessage = async (event) => {
+            ws.onmessage = async (event) => {
                 try {
                     // Handle Blob data by converting to text
                     let messageData;
@@ -165,7 +168,7 @@
                         if (match) {
                             return {
                                 timestamp: match[1],
-                                message: match[2] ?? logString,
+                                message: (match[2].trim() || logString),
                             };
                         }
 
@@ -209,6 +212,10 @@
                 console.error("WebSocket error:", error);
                 logsConnectionError = "Failed to connect to log stream";
                 isConnectingToLogs = false;
+                if (websocket) {
+                    websocket.close();
+                    websocket = null;
+                }
             };
 
             websocket.onclose = () => {
@@ -587,7 +594,7 @@
                                     <div
                                         class="streaming-logs-container"
                                         role="log"
-                                        aria-live="polite"
+                                        aria-live="off"
                                         bind:this={logsContainerElement}
                                     >
                                         {#each streamingLogs as log, index (log.timestamp + "-" + index)}
@@ -992,12 +999,17 @@
         background-color: var(--md-surface-container-lowest);
     }
 
+    :root {
+        --md-logs-background: #1a1a1a;
+        --md-logs-text: #e0e0e0;
+    }
+
     .streaming-logs-container {
         max-height: 400px;
         overflow-y: auto;
         padding: var(--md-spacing-sm);
-        background-color: #1a1a1a;
-        color: #e0e0e0;
+        background-color: var(--md-logs-background);
+        color: var(--md-logs-text);
         font-family: "Courier New", monospace;
         font-size: 13px;
         line-height: 1.4;
