@@ -94,9 +94,9 @@ export function clearAuthToken() {
 
 /**
  * Retrieves the authentication token for WebSocket connections.
- * @returns {Promise<string|null>} The 'Girder-Token' or null if not available.
+ * @returns {string|null} The 'Girder-Token' or null if not available.
  */
-export async function getGirderToken() {
+export function getGirderToken() {
     return getAuthToken();
 }
 

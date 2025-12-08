@@ -119,7 +119,7 @@
                         if (match) {
                             return {
                                 timestamp: match[1],
-                                message: match[2] || logString,
+                                message: match[2] ?? logString,
                             };
                         }
 
@@ -482,6 +482,7 @@
                             class="logs-toggle-button"
                             on:click={toggleLogsVisibility}
                             type="button"
+                            aria-expanded={isLogsVisible}
                         >
                             <span
                                 class="material-icons logs-toggle-icon"
@@ -527,16 +528,17 @@
                                         >
                                     </div>
                                 {:else}
-                                    <div class="streaming-logs-container">
-                                        {#each streamingLogs as log, index (index)}
+                                    <div class="streaming-logs-container" role="log" aria-live="polite">
+                                        {#each streamingLogs as log, index (log.timestamp + '-' + index)}
                                             <div
                                                 class="log-entry"
                                                 data-level={log.level}
                                             >
                                                 <span class="log-timestamp">
-                                                    {new Date(
-                                                        log.timestamp,
-                                                    ).toLocaleTimeString()}
+                                                    {(() => {
+                                                        const date = new Date(log.timestamp);
+                                                        return isNaN(date.getTime()) ? "N/A" : date.toLocaleTimeString();
+                                                    })()}
                                                 </span>
                                                 <span class="log-message"
                                                     >{log.message}</span
