@@ -127,10 +127,21 @@
             );
             const websocketUrl = `${wsUrl}/logs/docker?token=${encodeURIComponent(token)}`;
 
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+            }
             websocket = new WebSocket(websocketUrl);
 
             websocket.onopen = () => {
                 console.log("WebSocket connection established for logs");
+                // Check if disconnect was called during connection attempt
+                if (!isConnectingToLogs) {
+                    // Connection was cancelled, close immediately
+                    websocket?.close();
+                    websocket = null;
+                    return;
+                }
                 isConnectingToLogs = false;
             };
 
@@ -213,10 +224,17 @@
     }
 
     function disconnectFromLogs() {
+        // Cancel any ongoing connection attempt
+        if (isConnectingToLogs) {
+            isConnectingToLogs = false;
+        }
+
+        // Close existing WebSocket connection
         if (websocket) {
             websocket.close();
             websocket = null;
         }
+
         clearLogs();
         logsConnectionError = null;
     }
