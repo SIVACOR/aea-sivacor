@@ -93,6 +93,22 @@ export function clearAuthToken() {
 }
 
 /**
+ * Retrieves the authentication token for WebSocket connections.
+ * @returns {Promise<string|null>} The 'Girder-Token' or null if not available.
+ */
+export async function getGirderToken() {
+    return getAuthToken();
+}
+
+/**
+ * Gets the base Girder URL for WebSocket connections.
+ * @returns {string} The base Girder URL.
+ */
+export function getGirderUrl() {
+    return BASE_URL.replace('/api/v1', '');
+}
+
+/**
  * Generic function to make an authenticated API call.
  * @param {string} endpoint - The API path (e.g., '/user/me').
  * @param {object} options - Fetch options.
