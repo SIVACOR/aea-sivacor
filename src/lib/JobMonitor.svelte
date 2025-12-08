@@ -41,6 +41,10 @@
     let streamingLogs = [];
     let isConnectingToLogs = false;
     let logsConnectionError = null;
+    let logsContainerElement = null; // Reference to the logs container for scrolling
+
+    // Log management constants
+    const MAX_LOG_ENTRIES = 1000;
 
     $: showRunner = !isMonitoring && !currentJobId && !checkingLatestSubmission;
 
@@ -71,6 +75,37 @@
             }
         }
         return files;
+    }
+
+    /**
+     * Adds a log entry while maintaining the maximum log limit
+     */
+    function addLogEntry(logEntry) {
+        streamingLogs = [...streamingLogs, logEntry];
+
+        // Keep only the last MAX_LOG_ENTRIES
+        if (streamingLogs.length > MAX_LOG_ENTRIES) {
+            streamingLogs = streamingLogs.slice(-MAX_LOG_ENTRIES);
+        }
+    }
+
+    /**
+     * Clears all streaming logs
+     */
+    function clearLogs() {
+        streamingLogs = [];
+    }
+
+    /**
+     * Scrolls the logs container to the bottom
+     */
+    function scrollLogsToBottom() {
+        if (logsContainerElement && isLogsVisible) {
+            setTimeout(() => {
+                logsContainerElement.scrollTop =
+                    logsContainerElement.scrollHeight;
+            }, 0);
+        }
     }
 
     async function connectToLogs() {
@@ -140,7 +175,7 @@
                             message: parsed.message,
                             level: logData.level || "info",
                         };
-                        streamingLogs = [...streamingLogs, logEntry];
+                        addLogEntry(logEntry);
                     } catch (jsonError) {
                         // If not JSON, treat as plain text and parse timestamp
                         const parsed = parseLogMessage(messageData);
@@ -149,21 +184,11 @@
                             message: parsed.message,
                             level: "info",
                         };
-                        streamingLogs = [...streamingLogs, logEntry];
+                        addLogEntry(logEntry);
                     }
 
                     // Auto-scroll to bottom if logs are visible
-                    if (isLogsVisible) {
-                        setTimeout(() => {
-                            const logsContainer = document.querySelector(
-                                ".streaming-logs-container",
-                            );
-                            if (logsContainer) {
-                                logsContainer.scrollTop =
-                                    logsContainer.scrollHeight;
-                            }
-                        }, 0);
-                    }
+                    scrollLogsToBottom();
                 } catch (error) {
                     console.error("Error processing log message:", error);
                 }
@@ -192,7 +217,7 @@
             websocket.close();
             websocket = null;
         }
-        streamingLogs = [];
+        clearLogs();
         logsConnectionError = null;
     }
 
@@ -503,6 +528,19 @@
                             {/if}
                         </button>
 
+                        <!-- Clear Logs Button -->
+                        {#if isLogsVisible && streamingLogs.length > 0}
+                            <button
+                                class="clear-logs-button"
+                                on:click={clearLogs}
+                                type="button"
+                                title="Clear all logs"
+                            >
+                                <span class="material-icons">clear_all</span>
+                                <span>Clear Logs</span>
+                            </button>
+                        {/if}
+
                         {#if isLogsVisible}
                             <div class="logs-content">
                                 {#if logsConnectionError}
@@ -528,16 +566,27 @@
                                         >
                                     </div>
                                 {:else}
-                                    <div class="streaming-logs-container" role="log" aria-live="polite">
-                                        {#each streamingLogs as log, index (log.timestamp + '-' + index)}
+                                    <div
+                                        class="streaming-logs-container"
+                                        role="log"
+                                        aria-live="polite"
+                                        bind:this={logsContainerElement}
+                                    >
+                                        {#each streamingLogs as log, index (log.timestamp + "-" + index)}
                                             <div
                                                 class="log-entry"
                                                 data-level={log.level}
                                             >
                                                 <span class="log-timestamp">
                                                     {(() => {
-                                                        const date = new Date(log.timestamp);
-                                                        return isNaN(date.getTime()) ? "N/A" : date.toLocaleTimeString();
+                                                        const date = new Date(
+                                                            log.timestamp,
+                                                        );
+                                                        return isNaN(
+                                                            date.getTime(),
+                                                        )
+                                                            ? "N/A"
+                                                            : date.toLocaleTimeString();
                                                     })()}
                                                 </span>
                                                 <span class="log-message"
@@ -893,6 +942,31 @@
         border-top: 2px solid var(--md-primary);
         border-radius: 50%;
         animation: spin 1s linear infinite;
+    }
+
+    .clear-logs-button {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        margin: var(--md-spacing-sm) var(--md-spacing-md) 0;
+        background-color: var(--md-surface-variant);
+        border: 1px solid var(--md-outline-variant);
+        border-radius: var(--md-border-radius);
+        color: var(--md-on-surface-variant);
+        font-size: var(--md-font-caption);
+        cursor: pointer;
+        transition: all var(--md-transition-standard);
+    }
+
+    .clear-logs-button:hover {
+        background-color: var(--md-secondary-container);
+        color: var(--md-on-secondary-container);
+        border-color: var(--md-secondary);
+    }
+
+    .clear-logs-button .material-icons {
+        font-size: 16px;
     }
 
     .logs-content {
