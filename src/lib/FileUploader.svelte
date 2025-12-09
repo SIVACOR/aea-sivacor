@@ -4,6 +4,29 @@
 
     const UPLOAD_CHUNK_SIZE = 1024 * 1024 * 5;
 
+    // Allowed file types and extensions
+    const ALLOWED_EXTENSIONS = [
+        ".zip",
+        ".tar",
+        ".tar.gz",
+        ".tgz",
+        ".tar.bz2",
+        ".tbz2",
+        ".tar.xz",
+        ".txz",
+    ];
+    const ALLOWED_MIME_TYPES = [
+        "application/zip",
+        "application/x-zip-compressed",
+        "application/x-tar",
+        "application/x-gtar",
+        "application/gzip",
+        "application/x-gzip",
+        "application/x-compressed-tar",
+        "application/x-bzip2",
+        "application/x-xz",
+    ];
+
     // State variables
     let fileInput;
     let selectedFile = null;
@@ -14,9 +37,46 @@
 
     const dispatch = createEventDispatcher();
 
+    /**
+     * Validates if the file type is allowed (zip or tar variants)
+     */
+    function validateFileType(file) {
+        if (!file) return false;
+
+        const fileName = file.name.toLowerCase();
+        const fileType = file.type;
+
+        // Check by file extension
+        const hasValidExtension = ALLOWED_EXTENSIONS.some((ext) =>
+            fileName.endsWith(ext),
+        );
+
+        // Check by MIME type
+        const hasValidMimeType = ALLOWED_MIME_TYPES.includes(fileType);
+
+        return hasValidExtension || hasValidMimeType;
+    }
+
     function handleFileSelect(event) {
         errorMessage = null;
-        selectedFile = event.target.files[0];
+        const file = event.target.files[0];
+
+        if (!file) {
+            selectedFile = null;
+            uploadProgress = 0;
+            return;
+        }
+
+        // Validate file type
+        if (!validateFileType(file)) {
+            errorMessage = `Invalid file type. Please select a ZIP or TAR archive (.zip, .tar, .tar.gz, .tgz, .tar.bz2, .tbz2, .tar.xz, .txz)`;
+            selectedFile = null;
+            // Clear the file input
+            if (fileInput) fileInput.value = "";
+            return;
+        }
+
+        selectedFile = file;
         uploadProgress = 0;
     }
 
@@ -98,7 +158,9 @@
     <div class="upload-header">
         <span class="material-icons upload-icon">cloud_upload</span>
         <h3>File Upload</h3>
-        <p class="upload-description">Select a file to upload for processing</p>
+        <p class="upload-description">
+            Select a ZIP or TAR archive for processing
+        </p>
     </div>
 
     {#if errorMessage}
@@ -116,12 +178,16 @@
             disabled={isUploading}
             id="file-input"
             class="file-input"
+            accept=".zip,.tar,.tar.gz,.tgz,.tar.bz2,.tbz2,.tar.xz,.txz,application/zip,application/x-tar,application/gzip,application/x-gzip"
         />
         <label for="file-input" class="file-input-label">
             <span class="material-icons file-icon">attach_file</span>
             <div class="file-input-text">
-                <strong>Choose a file</strong> or drag it here
-                <small>Maximum file size: 5GB</small>
+                <strong>Choose an archive file</strong> or drag it here
+                <small
+                    >Supported formats: ZIP, TAR (.zip, .tar.gz, .tgz, etc.) •
+                    Max size: 5GB</small
+                >
             </div>
         </label>
     </div>
