@@ -105,6 +105,7 @@
             // Step 1: Initiate the upload
             const { _id: uploadId } = await initiateFileUpload(selectedFile);
             const totalSize = selectedFile.size;
+            const totalSizeMB = Math.round(totalSize / (1024 * 1024));
 
             let offset = 0;
             let uploadedBytes = 0;
@@ -116,7 +117,9 @@
                     offset,
                     offset + UPLOAD_CHUNK_SIZE,
                 );
-                uploadStatus = `Uploading chunk ${Math.ceil(offset / UPLOAD_CHUNK_SIZE) + 1}...`;
+
+                const uploadedMB = Math.round(uploadedBytes / (1024 * 1024));
+                uploadStatus = `Uploading ${uploadedMB} of ${totalSizeMB} MB...`;
 
                 lastChunk = await uploadFileChunk(uploadId, offset, chunk);
 
