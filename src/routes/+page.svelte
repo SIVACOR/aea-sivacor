@@ -81,6 +81,8 @@
      * Handle title updates from LoginForm component
      */
     function handleLoginTitleUpdate(event) {
+        const { title } = event.detail;
+        console.log("LoginForm title update:", title);
         // The LoginForm can override the reactive title temporarily
         // but the reactive browserTitle will take precedence once state changes
     }

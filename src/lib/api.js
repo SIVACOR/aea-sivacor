@@ -4,8 +4,7 @@ import Cookies from 'js-cookie';
 import { env } from '$env/dynamic/public';
 
 // API Base URL from environment variable with fallback for development
-const BASE_URL = env.SIVACOR_API_URL || 'https://girder.sivacor.org/api/v1';
-// const BASE_URL = 'https://girder.local.xarthisius.xyz/api/v1';
+const BASE_URL = env.PUBLIC_SIVACOR_API_URL || 'https://girder.sivacor.org/api/v1';
 export const JOB_POLLING_INTERVAL = 5000; // 5 seconds
 
 /**
@@ -35,6 +34,9 @@ export function getCurrentUser() {
 
 export async function getUploadsFolder() {
     const user = getCurrentUser();
+    if (!user || !user._id) {
+        throw new Error('User not logged in or user ID not available.');
+    }
     const endpoint = `/folder?parentType=user&parentId=${user._id}&name=Uploads&limit=1`;
     const folder = await api(endpoint);
     if (!Array.isArray(folder) || folder.length !== 1) {

@@ -103,20 +103,6 @@
         }
     }
 
-    /**
-     * Clear saved user selections from localStorage
-     */
-    function clearUserSelections() {
-        try {
-            localStorage.removeItem(STORAGE_KEYS.configEntries);
-        } catch (error) {
-            console.warn(
-                "Failed to clear user selections from localStorage:",
-                error,
-            );
-        }
-    }
-
     // Reactive statements to save user selections when they change
     $: if (configEntries && configEntries.length > 0 && !isInitializing) {
         saveUserSelections();

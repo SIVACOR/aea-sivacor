@@ -190,7 +190,7 @@
                             level: logData.level || "info",
                         };
                         addLogEntry(logEntry);
-                    } catch (jsonError) {
+                    } catch {
                         // If not JSON, treat as plain text and parse timestamp
                         const parsed = parseLogMessage(messageData);
                         const logEntry = {
