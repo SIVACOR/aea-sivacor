@@ -53,24 +53,29 @@
 
     // File type mappings for downloadable files
     const FILE_TYPE_LABELS = {
-        sig_file_id: "TRS Signature",
-        tro_file_id: "TRO Declaration",
-        tsr_file_id: "Trusted Timestamp",
-        stdout_file_id: "Run output log",
-        stderr_file_id: "Run error log",
-        replpack_file_id: "Replicated Package",
+        sig_file_id: {label: "TRS Signature", success: true},
+        tro_file_id: {label: "TRO Declaration", success: true},
+        tsr_file_id: {label: "Trusted Timestamp", success: true},
+        stdout_file_id: {label: "Run output log", success: false},
+        stderr_file_id: {label: "Run error log", success: false},
+        replpack_file_id: {label: "Replicated Package", success: true},
     };
 
     function getDownloadableFiles() {
         if (!latestSubmission || !latestSubmission.meta) return [];
         const files = [];
         const meta = latestSubmission.meta;
+        const jobStatus = jobDetails ? jobDetails.status : null;
+        const isSuccess = jobStatus === 3;
 
-        for (const [fileKey, label] of Object.entries(FILE_TYPE_LABELS)) {
+        for (const [fileKey, entry] of Object.entries(FILE_TYPE_LABELS)) {
+            if (entry.success && !isSuccess) {
+                continue; // Skip success-only files if job not successful
+            }
             if (meta[fileKey]) {
                 files.push({
                     id: meta[fileKey],
-                    label: label,
+                    label: entry.label,
                 });
             }
         }
