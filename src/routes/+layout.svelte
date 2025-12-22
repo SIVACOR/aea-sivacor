@@ -4,7 +4,22 @@
     import { page } from "$app/stores"; // Import the page store
     import { checkAuthentication, setAuthToken } from "../lib/api";
     import { authLoading } from "../lib/stores";
+    import Banner from "../lib/Banner.svelte";
     import "../app.css";
+    import { browser } from "$app/environment";
+
+    let showBanner = true;
+    if (browser) {
+        showBanner = sessionStorage.getItem("bannerDismissed") !== "true";
+    }
+
+    const maintenanceMessage =
+        "SIVACOR will be down for scheduled maintenance on January 1, 2026, from 07:00 to 19:00 EST.";
+
+    function dismissBanner() {
+        showBanner = false;
+        sessionStorage.setItem("bannerDismissed", "true");
+    }
 
     onMount(async () => {
         const url = new URL($page.url);
@@ -53,6 +68,9 @@
         </div>
     </div>
 {:else}
+    {#if showBanner}
+        <Banner message={maintenanceMessage} on:dismiss={dismissBanner} />
+    {/if}
     <slot />
 {/if}
 
