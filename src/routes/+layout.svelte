@@ -8,8 +8,8 @@
     import "../app.css";
     import { browser } from "$app/environment";
 
-    let showBanner = true;
-    if (browser) {
+    let showBanner = false;
+    if (browser && showBanner) {
         showBanner = sessionStorage.getItem("bannerDismissed") !== "true";
     }
 
