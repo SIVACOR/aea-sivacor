@@ -682,7 +682,7 @@
                                     >
                                     <span>Error Log</span>
                                 </div>
-                                <pre class="log-content">{jobDetails.log}</pre>
+                                <pre class="log-content">{jobDetails.log.join('')}</pre>
                             </div>
                         {/if}
 
