@@ -55,7 +55,11 @@
     <div class="loading-container">
         <div class="loading-content">
             <div class="app-logo">
-                <span class="material-icons logo-icon">science</span>
+                <img
+                    src="/sivacor_logo_notext_trans.png"
+                    alt="SIVACOR logo"
+                    class="logo-icon"
+                />
                 <h1>SIVACOR</h1>
             </div>
             <div class="loading-spinner-container">
@@ -100,11 +104,9 @@
     }
 
     .logo-icon {
-        font-size: 4rem;
-        color: white;
+        width: 64px;
+        height: 64px;
         margin-bottom: var(--md-spacing-md);
-        display: block;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .app-logo h1 {
@@ -171,7 +173,8 @@
         }
 
         .logo-icon {
-            font-size: 3rem;
+            width: 48px;
+            height: 48px;
         }
 
         .md-spinner.large {

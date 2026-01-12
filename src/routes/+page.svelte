@@ -93,7 +93,7 @@
     function getDocsUrl(path = "") {
         const currentUrl = new URL($page.url);
         // Replace the current subdomain/domain with docs subdomain
-        const docsHost = currentUrl.hostname.replace(/^[^.]*\./, "docs.")
+        const docsHost = currentUrl.hostname.replace(/^[^.]*\./, "docs.");
         const docsUrl = `${currentUrl.protocol}//${docsHost}${currentUrl.port ? `:${currentUrl.port}` : ""}${path}`;
         return docsUrl;
     }
@@ -137,7 +137,11 @@
         <div class="header-content">
             <div class="header-top">
                 <h1 class="app-title">
-                    <span class="material-icons">science</span>
+                    <img
+                        src="/sivacor_logo_notext_trans.png"
+                        alt="SIVACOR logo"
+                        class="logo-icon-small"
+                    />
                     SIVACOR
                 </h1>
                 <nav class="header-nav">
@@ -498,6 +502,12 @@
     .support-item .material-icons {
         font-size: 16px;
         color: var(--md-primary);
+    }
+
+    .logo-icon-small {
+        width: 64px;
+        height: 64px;
+        margin-right: 8px;
     }
 
     @keyframes fadeIn {
