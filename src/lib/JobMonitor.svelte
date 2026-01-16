@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { onMount, onDestroy } from "svelte";
     import { createEventDispatcher } from "svelte";
     import {
@@ -27,21 +27,25 @@
 
     // State
     let isMonitoring = false;
-    let jobDetails = null;
-    let jobStatusText = null;
-    let errorMessage = null;
-    let pollIntervalId = null;
-    let currentJobId = null;
+    let jobDetails: any = null;
+    let jobStatusText: string | null = null;
+    let errorMessage: string | null = null;
+    let pollIntervalId: ReturnType<typeof setInterval> | null = null;
+    let currentJobId: string | null = null;
     let checkingLatestSubmission = true;
-    let latestSubmission = null;
+    let latestSubmission: any = null;
 
     // WebSocket logs state
-    let websocket = null;
+    let websocket: WebSocket | null = null;
     let isLogsVisible = false;
-    let streamingLogs = [];
+    let streamingLogs: Array<{
+        timestamp: string;
+        message: string;
+        level: string;
+    }> = [];
     let isConnectingToLogs = false;
-    let logsConnectionError = null;
-    let logsContainerElement = null; // Reference to the logs container for scrolling
+    let logsConnectionError: string | null = null;
+    let logsContainerElement: HTMLElement | null = null; // Reference to the logs container for scrolling
 
     // Log management constants
     const MAX_LOG_ENTRIES = 1000;
@@ -88,7 +92,11 @@
     /**
      * Adds a log entry while maintaining the maximum log limit
      */
-    function addLogEntry(logEntry) {
+    function addLogEntry(logEntry: {
+        timestamp: string;
+        message: string;
+        level: string;
+    }) {
         streamingLogs.push(logEntry);
         if (streamingLogs.length > MAX_LOG_ENTRIES) {
             streamingLogs.shift();
@@ -110,8 +118,10 @@
     function scrollLogsToBottom() {
         if (logsContainerElement && isLogsVisible) {
             setTimeout(() => {
-                logsContainerElement.scrollTop =
-                    logsContainerElement.scrollHeight;
+                if (logsContainerElement) {
+                    logsContainerElement.scrollTop =
+                        logsContainerElement.scrollHeight;
+                }
             }, 0);
         }
     }
@@ -167,7 +177,7 @@
                     }
 
                     // Function to extract timestamp and message from log string
-                    const parseLogMessage = (logString) => {
+                    const parseLogMessage = (logString: string) => {
                         // Check if message starts with ISO timestamp pattern
                         const timestampRegex =
                             /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s*(.*)/;
@@ -233,7 +243,8 @@
             };
         } catch (error) {
             console.error("Error connecting to logs:", error);
-            logsConnectionError = error.message;
+            logsConnectionError =
+                error instanceof Error ? error.message : "Unknown error";
             isConnectingToLogs = false;
         }
     }
@@ -263,16 +274,21 @@
         }
     }
 
-    async function handleFileDownload(fileId, filename) {
+    async function handleFileDownload(
+        fileId: string,
+        filename: string | undefined = undefined,
+    ) {
         try {
             await downloadFile(fileId, filename);
         } catch (error) {
             console.error("Download failed:", error);
-            alert(`Download failed: ${error.message}`);
+            alert(
+                `Download failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+            );
         }
     }
 
-    async function checkJobStatus(jobId) {
+    async function checkJobStatus(jobId: string) {
         try {
             const details = await fetchJobDetails(jobId);
             try {
@@ -297,12 +313,13 @@
 
             if (details.status === 4) {
                 errorMessage =
-                    details.error ||
+                    (details as any).error ||
                     "The job encountered an unspecified error.";
             }
 
             jobDetails = details;
-            jobStatusText = STATUS[details.status] || "UNKNOWN";
+            jobStatusText =
+                STATUS[details.status as keyof typeof STATUS] || "UNKNOWN";
 
             // Dispatch job state update for title management
             dispatch("jobstateupdate", {
@@ -318,7 +335,7 @@
         }
     }
 
-    function startPolling(jobId) {
+    function startPolling(jobId: string) {
         isMonitoring = true;
         checkJobStatus(jobId);
         pollIntervalId = setInterval(() => {
@@ -379,7 +396,9 @@
 
             if (submission && submission.meta && submission.meta.job_id) {
                 currentJobId = submission.meta.job_id;
-                startPolling(currentJobId);
+                if (currentJobId) {
+                    startPolling(currentJobId);
+                }
             }
         } catch (error) {
             console.error("Error checking latest submission:", error);
@@ -400,16 +419,20 @@
     // Use a separate variable to track when we should start polling
     let shouldPoll = false;
     $: shouldPoll =
-        currentJobId && !isMonitoring && (!jobDetails || jobDetails.status < 3);
+        !!currentJobId &&
+        !isMonitoring &&
+        (!jobDetails || jobDetails.status < 3);
 
     // Use an effect to handle polling without creating infinite loops
     $: if (shouldPoll && currentJobId) {
         setTimeout(() => {
-            startPolling(currentJobId);
+            if (currentJobId) {
+                startPolling(currentJobId);
+            }
         }, 0);
     }
 
-    function handleJobSubmitted(event) {
+    function handleJobSubmitted(event: any) {
         const newJobId = event.detail.jobId;
         currentJobId = newJobId;
         latestSubmission = null;
@@ -421,7 +444,7 @@
         });
     }
 
-    function getStatusColor(status) {
+    function getStatusColor(status: number): string {
         switch (status) {
             case 0:
             case 1:
@@ -438,7 +461,7 @@
         }
     }
 
-    function getStatusIcon(status) {
+    function getStatusIcon(status: number): string {
         switch (status) {
             case 0:
             case 1:
@@ -469,7 +492,7 @@
         }
     }
 
-    function formatTimestamp(timestamp) {
+    function formatTimestamp(timestamp: string): string {
         const date = new Date(timestamp);
         return isNaN(date.getTime()) ? "N/A" : date.toLocaleTimeString();
     }

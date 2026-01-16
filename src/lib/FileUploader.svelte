@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { createEventDispatcher } from "svelte";
     import { initiateFileUpload, uploadFileChunk } from "./api";
 
@@ -28,19 +28,19 @@
     ];
 
     // State variables
-    let fileInput;
-    let selectedFile = null;
+    let fileInput: HTMLInputElement;
+    let selectedFile: File | null = null;
     let uploadProgress = 0;
     let isUploading = false;
     let uploadStatus = "";
-    let errorMessage = null;
+    let errorMessage: string | null = null;
 
     const dispatch = createEventDispatcher();
 
     /**
      * Validates if the file type is allowed (zip or tar variants)
      */
-    function validateFileType(file) {
+    function validateFileType(file: File | null): boolean {
         if (!file) return false;
 
         const fileName = file.name.toLowerCase();
@@ -57,9 +57,10 @@
         return hasValidExtension || hasValidMimeType;
     }
 
-    function handleFileSelect(event) {
-        errorMessage = null;
-        const file = event.target.files[0];
+    function handleFileSelect(event: Event) {
+        const target = event.target as HTMLInputElement;
+        if (!target || !target.files) return;
+        const file = target.files[0];
 
         if (!file) {
             selectedFile = null;
@@ -80,7 +81,7 @@
         uploadProgress = 0;
     }
 
-    function formatFileSize(bytes) {
+    function formatFileSize(bytes: number): string {
         if (bytes === 0) return "0 Bytes";
         const k = 1024;
         const sizes = ["Bytes", "KB", "MB", "GB"];
@@ -103,7 +104,8 @@
 
         try {
             // Step 1: Initiate the upload
-            const { _id: uploadId } = await initiateFileUpload(selectedFile);
+            const uploadResponse = await initiateFileUpload(selectedFile);
+            const uploadId = uploadResponse.id || (uploadResponse as any)._id;
             const totalSize = selectedFile.size;
             const totalSizeMB = Math.round(totalSize / (1024 * 1024));
 

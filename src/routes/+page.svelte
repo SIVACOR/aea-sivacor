@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { user } from "../lib/stores";
     import { logout } from "../lib/api";
     import LoginForm from "../lib/LoginForm.svelte";
@@ -9,9 +9,13 @@
     $: isAuthenticated = $user !== null;
 
     // State for tracking current job and submission status
-    let currentJobState = null;
+    let currentJobState: {
+        status: string;
+        isRunning: boolean;
+        hasError: boolean;
+    } | null = null;
     let isJobRunning = false;
-    let jobStatusText = null;
+    let jobStatusText: string | null = null;
 
     // Reactive title based on authentication and job state
     $: browserTitle = (() => {
@@ -55,7 +59,7 @@
     /**
      * Handle job state updates from JobMonitor component
      */
-    function handleJobStateUpdate(event) {
+    function handleJobStateUpdate(event: any) {
         const { status, isRunning, hasError } = event.detail;
         currentJobState = {
             status: status,
@@ -71,7 +75,7 @@
     /**
      * Handle job submission events from JobRunner/JobMonitor
      */
-    function handleJobSubmitted(event) {
+    function handleJobSubmitted(event: any) {
         const { status } = event.detail;
         isJobRunning = true;
         jobStatusText = status || "Submission in Progress";
@@ -80,7 +84,7 @@
     /**
      * Handle title updates from LoginForm component
      */
-    function handleLoginTitleUpdate(event) {
+    function handleLoginTitleUpdate(event: any) {
         const { title } = event.detail;
         console.log("LoginForm title update:", title);
         // The LoginForm can override the reactive title temporarily
@@ -90,7 +94,7 @@
     /**
      * Gets the documentation base URL by replacing the current domain with docs subdomain
      */
-    function getDocsUrl(path = "") {
+    function getDocsUrl(path: string = "") {
         const currentUrl = new URL($page.url);
         // Replace the current subdomain/domain with docs subdomain
         const docsHost = currentUrl.hostname.replace(/^[^.]*\./, "docs.");
@@ -101,7 +105,7 @@
     /**
      * Opens documentation in a new tab
      */
-    function openDocs(path = "") {
+    function openDocs(path: string = "") {
         window.open(getDocsUrl(path), "_blank", "noopener,noreferrer");
     }
 
@@ -111,7 +115,7 @@
     function sendSupportEmail() {
         const subject = encodeURIComponent("SIVACOR Support Request");
         const body = encodeURIComponent(
-            `Hello SIVACOR Support Team,\n\nI have a question/need assistance with the SIVACOR application.\n\nUser: ${$user ? `${$user.firstName} ${$user.lastName}` : "Anonymous"}\n\nDescription of my question/issue:\n[Please describe your question or issue here]\n\nThank you for your assistance,`,
+            `Hello SIVACOR Support Team,\n\nI have a question/need assistance with the SIVACOR application.\n\nUser: ${$user ? `${($user as any).firstName} ${($user as any).lastName}` : "Anonymous"}\n\nDescription of my question/issue:\n[Please describe your question or issue here]\n\nThank you for your assistance,`,
         );
         window.location.href = `mailto:support@sivacor.org?subject=${subject}&body=${body}`;
     }
@@ -122,7 +126,7 @@
     function sendFeedback() {
         const subject = encodeURIComponent("SIVACOR Feedback");
         const body = encodeURIComponent(
-            `Hello SIVACOR Team,\n\nI would like to provide feedback about the SIVACOR application.\n\nUser: ${$user ? `${$user.firstName} ${$user.lastName}` : "Anonymous"}\n\nFeedback:\n[Please share your feedback, suggestions, or feature requests here]\n\nThank you,`,
+            `Hello SIVACOR Team,\n\nI would like to provide feedback about the SIVACOR application.\n\nUser: ${$user ? `${($user as any).firstName} ${($user as any).lastName}` : "Anonymous"}\n\nFeedback:\n[Please share your feedback, suggestions, or feature requests here]\n\nThank you,`,
         );
         window.location.href = `mailto:support@sivacor.org?subject=${subject}&body=${body}`;
     }
@@ -176,7 +180,8 @@
                             >account_circle</span
                         >
                         <span class="user-name"
-                            >Hello, {$user.firstName} {$user.lastName}</span
+                            >Hello, {($user as any)?.firstName}
+                            {($user as any)?.lastName}</span
                         >
                     </div>
                     <button
@@ -350,11 +355,6 @@
         font-weight: 300;
         margin-bottom: var(--md-spacing-sm);
         text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-    }
-
-    .app-title .material-icons {
-        font-size: 3rem;
-        color: var(--md-secondary);
     }
 
     .app-subtitle {

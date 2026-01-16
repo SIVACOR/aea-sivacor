@@ -3,6 +3,51 @@ import { user } from './stores';
 import Cookies from 'js-cookie';
 import { env } from '$env/dynamic/public';
 
+// Type definitions
+interface OAuthProvider {
+    id: string;
+    name: string;
+    url: string;
+}
+
+interface User {
+    _id: string;
+    login: string;
+    email: string;
+    [key: string]: any;
+}
+
+interface Folder {
+    _id: string;
+    name: string;
+    baseParentType: string;
+    baseParentId: string;
+    meta?: Record<string, any>;
+    [key: string]: any;
+}
+
+interface JobDetails {
+    _id: string;
+    status: number;
+    created: string;
+    log?: string[];
+    resultPath?: string;
+    [key: string]: any;
+}
+
+interface JobStageConfig {
+    id: string;
+    selectedImage: string;
+    selectedTag: string;
+    executionFileName: string;
+}
+
+interface ApiJobStageConfig {
+    image_name: string;
+    image_tag: string;
+    main_file: string;
+}
+
 // API Base URL from environment variable with fallback for development
 const BASE_URL = env.PUBLIC_SIVACOR_API_URL || 'https://girder.sivacor.org/api/v1';
 export const JOB_POLLING_INTERVAL = 5000; // 5 seconds
@@ -12,7 +57,7 @@ export const JOB_POLLING_INTERVAL = 5000; // 5 seconds
  * @param {string} redirectUrl - The URL to return to after successful authentication.
  * @returns {Promise<Array<{id: string, name: string, url: string}>>} The list of providers.
  */
-export async function fetchOAuthProviders(redirectUrl) {
+export async function fetchOAuthProviders(redirectUrl: string): Promise<OAuthProvider[]> {
     const encodedRedirect = encodeURIComponent(redirectUrl);
     const endpoint = `/oauth/provider?redirect=${encodedRedirect}&list=true`;
 
@@ -26,7 +71,7 @@ export async function fetchOAuthProviders(redirectUrl) {
     return providers;
 }
 
-export function getCurrentUser() {
+export function getCurrentUser(): User | null {
     // Use get(store) to synchronously read the store's value
     const currentUser = get(user);
     return currentUser;
@@ -45,7 +90,7 @@ export async function getUploadsFolder() {
     return folder[0]._id;
 }
 
-export async function getLatestSubmission() {
+export async function getLatestSubmission(): Promise<Folder | null> {
     const collections = await api('/collection?name=Submissions');
     if (!Array.isArray(collections) || collections.length !== 1) {
         return null;
@@ -64,7 +109,7 @@ export async function getLatestSubmission() {
  * Sets the authentication token in the preferred storage (e.g., as a cookie).
  * @param {string} token - The 'Girder-Token' value.
  */
-export function setAuthToken(token) {
+export function setAuthToken(token: string): void {
     Cookies.set('girderToken', token, { expires: 7, secure: true, sameSite: 'Lax' });
     // localStorage.setItem('girderToken', token); 
 }
@@ -73,7 +118,7 @@ export function setAuthToken(token) {
  * Retrieves the authentication token from either the cookie or localStorage.
  * @returns {string | null} The 'Girder-Token' or null.
  */
-export function getGirderToken() {
+export function getGirderToken(): string | null {
     const token = Cookies.get('girderToken') || localStorage.getItem('girderToken');
     return token;
 }
@@ -82,7 +127,7 @@ export function getGirderToken() {
  * Given submission folder object, return url to view submission details.
  * @returns {string} URL to a folder in Girder.
  */
-export function getSubmissionFolderUrl(folder) {
+export function getSubmissionFolderUrl(folder: Folder): string {
     return `${BASE_URL.replace('/api/v1', '')}/#${folder.baseParentType}/${folder.baseParentId}/folder/${folder._id}`;
 }
 
@@ -98,7 +143,7 @@ export function clearAuthToken() {
  * Gets the base Girder URL for WebSocket connections.
  * @returns {string} The base Girder URL.
  */
-export function getGirderUrl() {
+export function getGirderUrl(): string {
     return BASE_URL.replace('/api/v1', '');
 }
 
@@ -108,11 +153,11 @@ export function getGirderUrl() {
  * @param {object} options - Fetch options.
  * @returns {Promise<any>} The parsed JSON response.
  */
-export async function api(endpoint, options = {}) {
+export async function api(endpoint: string, options: RequestInit = {}): Promise<any> {
     const token = getGirderToken();
-    const headers = {
+    const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        ...options.headers
+        ...(options.headers as Record<string, string> || {})
     };
 
     if (token) {
@@ -176,17 +221,15 @@ export async function logout() {
 /**
  * Step 1: Initiates a multi-part file upload.
  * @param {File} file - The file object to upload.
- * @param {string} parentType - The type of the parent object (e.g., 'folder').
- * @param {string} parentId - The ID of the parent object.
  * @returns {Promise<{id: string, name: string}>} The upload object with ID.
  */
-export async function initiateFileUpload(file) {
+export async function initiateFileUpload(file: File): Promise<{ id: string; name: string }> {
     const parentId = await getUploadsFolder(); // Ensure we get the correct Uploads folder ID
     const query = new URLSearchParams({
         parentType: 'folder',
         parentId: parentId,
         name: file.name,
-        size: file.size,
+        size: String(file.size),
         mimeType: file.type || 'application/octet-stream'
     });
 
@@ -198,7 +241,7 @@ export async function initiateFileUpload(file) {
     return response;
 }
 
-export async function getImages() {
+export async function getImages(): Promise<any> {
     const endpoint = '/sivacor/image_tags';
     const response = await api(endpoint);
     return response;
@@ -210,7 +253,7 @@ export async function getImages() {
  * @param {number} offset - The starting byte offset of this chunk.
  * @param {Blob} chunk - The chunk of file data.
  */
-export async function uploadFileChunk(uploadId, offset, chunk) {
+export async function uploadFileChunk(uploadId: string, offset: number, chunk: Blob): Promise<any> {
     const endpoint = `/file/chunk?offset=${offset}&uploadId=${uploadId}`;
     const response = await api(endpoint, {
         method: 'POST',
@@ -231,13 +274,13 @@ export async function uploadFileChunk(uploadId, offset, chunk) {
  * @param {string|null} filename - Optional filename for the download. If not provided, will use the fileId.
  * @returns {Promise<void>} Resolves when download is initiated.
  */
-export async function downloadFile(fileId, filename = null) {
+export async function downloadFile(fileId: string, filename: string | null = null): Promise<void> {
     if (!fileId) {
         throw new Error("File ID must be provided.");
     }
 
     const token = getGirderToken();
-    const headers = {};
+    const headers: Record<string, string> = {};
 
     if (token) {
         headers['Girder-Token'] = token;
@@ -297,17 +340,16 @@ export async function downloadFile(fileId, filename = null) {
 /**
  * Submits a new processing job.
  * @param {string} fileId - The ID of the uploaded file.
- * @param {string} dropdownValue - The selected value from the dropdown ('image1' or 'image2').
- * @param {string} mainFile - The name of the main execution file.
+ * @param {JobStageConfig[]} config - The configuration for the job stages.
  * @returns {Promise<any>} The response object from the job creation endpoint.
  */
-export async function submitJob(fileId, config) {
+export async function submitJob(fileId: string, config: JobStageConfig[]): Promise<any> {
     const endpoint = `/sivacor/submit_job`;
 
     // translate config object to match expected API format
     // from [{"id": "...", "selectedImage": "...", "selectedTag": "...", "executionFileName":"..."}]
     // to [{"image_name": "...", "image_tag": "...", "main_file":"..."}]
-    const transformedConfig = config.map(stage => ({
+    const transformedConfig: ApiJobStageConfig[] = config.map((stage: JobStageConfig) => ({
         image_name: stage.selectedImage,
         image_tag: stage.selectedTag,
         main_file: stage.executionFileName
@@ -329,9 +371,9 @@ export async function submitJob(fileId, config) {
 /**
  * Fetches the details of a specific job.
  * @param {string} jobId - The ID of the job to fetch.
- * @returns {Promise<{_id: string, status: number, created: string, ...}>} The job object.
+ * @returns {Promise<JobDetails>} The job object.
  */
-export async function fetchJobDetails(jobId) {
+export async function fetchJobDetails(jobId: string): Promise<JobDetails> {
     if (!jobId) {
         throw new Error("Job ID must be provided.");
     }
@@ -343,7 +385,7 @@ export async function fetchJobDetails(jobId) {
  * @param {string} jobId - The ID of the job to cancel.
  * @returns {Promise<any>} The response object from the cancellation endpoint.
  */
-export async function cancelJob(jobId) {
+export async function cancelJob(jobId: string): Promise<any> {
     if (!jobId) {
         throw new Error("Job ID must be provided.");
     }

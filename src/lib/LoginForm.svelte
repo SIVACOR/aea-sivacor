@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
     import { page } from "$app/stores";
     import { fetchOAuthProviders } from "./api";
@@ -14,9 +14,9 @@
      */
 
     /** @type {OAuthProvider[] | null} */
-    let providers = null;
+    let providers: any[] | null = null;
     let loading = true;
-    let error = null;
+    let error: string | null = null;
 
     onMount(async () => {
         // Dispatch title update for login state
@@ -30,7 +30,7 @@
             providers = await fetchOAuthProviders(redirectUrl);
         } catch (e) {
             console.error("Failed to load OAuth providers:", e);
-            error = e.message;
+            error = e instanceof Error ? e.message : "Unknown error";
             // Dispatch title update for error state
             dispatch("titleupdate", {
                 title: "SIVACOR - Authentication Error",
@@ -44,14 +44,14 @@
      * Handles the button click by redirecting the user to the provider's URL.
      * @param {string} url
      */
-    function redirectToProvider(url) {
+    function redirectToProvider(url: string) {
         window.location.href = url;
     }
 
     /**
      * Gets the documentation base URL by replacing the current domain with docs subdomain
      */
-    function getDocsUrl(path = "") {
+    function getDocsUrl(path: string = "") {
         const currentUrl = new URL($page.url);
         // Replace the current subdomain/domain with docs subdomain
         const docsHost = currentUrl.hostname.replace(/^[^.]*\./, "docs.");
@@ -62,7 +62,7 @@
     /**
      * Opens documentation in a new tab
      */
-    function openDocs(path = "") {
+    function openDocs(path: string = "") {
         window.open(getDocsUrl(path), "_blank", "noopener,noreferrer");
     }
 

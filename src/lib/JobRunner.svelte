@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
     import { createEventDispatcher } from "svelte";
     import { submitJob, getImages } from "./api";
@@ -6,29 +6,34 @@
 
     // State for the dropdowns data
     /** @type {Record<string, string[]>} */
-    let imagesData = {}; // Object with image names as keys and tag arrays as values
+    let imagesData: Record<string, string[]> = {}; // Object with image names as keys and tag arrays as values
     /** @type {string[]} */
-    let availableImages = []; // Array of image names
+    let availableImages: string[] = []; // Array of image names
     let imagesLoading = true;
 
     // State for the file upload (will hold the ID when upload is done)
     /** @type {string | null} */
-    let uploadedFileId = null;
+    let uploadedFileId: string | null = null;
 
     // State for the job execution
     let isJobRunning = false;
     let jobStatusMessage = "";
     /** @type {string | null} */
-    let jobErrorMessage = null;
+    let jobErrorMessage: string | null = null;
     /** @type {string | null} */
-    let jobId = null;
+    let jobId: string | null = null;
 
     // Flag to prevent saving during initial load
     let isInitializing = true;
 
     // Configuration entries array - each entry represents a config row
     /** @type {Array<{id: string, selectedImage: string | null, selectedTag: string | null, executionFileName: string}>} */
-    let configEntries = [
+    let configEntries: Array<{
+        id: string;
+        selectedImage: string | null;
+        selectedTag: string | null;
+        executionFileName: string;
+    }> = [
         {
             id: crypto.randomUUID(),
             selectedImage: null,
@@ -162,7 +167,7 @@
     /**
      * @param {any} event - The upload complete event
      */
-    function handleUploadComplete(event) {
+    function handleUploadComplete(event: any) {
         uploadedFileId = event.detail.fileId;
         jobStatusMessage = `File uploaded! ID: ${uploadedFileId}. Ready to run job.`;
     }
@@ -187,7 +192,7 @@
      * Remove a configuration entry
      * @param {string} entryId - The ID of the entry to remove
      */
-    function removeConfigEntry(entryId) {
+    function removeConfigEntry(entryId: string) {
         // Always keep at least one entry
         if (configEntries.length > 1) {
             configEntries = configEntries.filter(
@@ -202,7 +207,7 @@
      * @param {string} entryId - The ID of the entry
      * @param {string | null} selectedImage - The selected image
      */
-    function updateEntryTags(entryId, selectedImage) {
+    function updateEntryTags(entryId: string, selectedImage: string) {
         const entry = configEntries.find((e) => e.id === entryId);
         if (entry && selectedImage && imagesData[selectedImage]) {
             const availableTagsForImage = imagesData[selectedImage];
@@ -246,11 +251,24 @@
         jobStatusMessage = `Starting job for image: ${fullImageName} with file: ${firstEntry.executionFileName}...`;
 
         try {
-            const jobResponse = await submitJob(
-                uploadedFileId,
-                configEntries
-            );
-            jobId = jobResponse._id || "N/A";
+            const validConfig = configEntries.filter(
+                (entry) =>
+                    entry.selectedImage &&
+                    entry.selectedTag &&
+                    entry.executionFileName,
+            ) as Array<{
+                id: string;
+                selectedImage: string;
+                selectedTag: string;
+                executionFileName: string;
+            }>;
+
+            if (validConfig.length === 0) {
+                throw new Error("No valid configuration entries to submit");
+            }
+
+            const response = await submitJob(uploadedFileId, validConfig);
+            jobId = response._id || "N/A";
             jobStatusMessage = `Job successfully started! Job ID: ${jobId}`;
             dispatch("jobsubmitted", {
                 jobId: jobId,
