@@ -574,6 +574,17 @@
                                 </div>
                             </div>
                         {/if}
+                        {#if jobDetails.updated}
+                            <div class="job-timestamp-info">
+                                <span class="material-icons">schedule</span>
+                                <div>
+                                    <div class="job-label">Last updated</div>
+                                    <div class="job-timestamp">
+                                        {formatFullDate(jobDetails.updated)}
+                                    </div>
+                                </div>
+                            </div>
+                        {/if}
                     </div>
 
                     <div class="job-status">
