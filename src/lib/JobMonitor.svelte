@@ -46,6 +46,9 @@
     // Log management constants
     const MAX_LOG_ENTRIES = 1000;
 
+    // Copy to clipboard state
+    let jobIdCopied = false;
+
     $: showRunner = !isMonitoring && !currentJobId && !checkingLatestSubmission;
 
     // Reactive check for polling state
@@ -53,12 +56,12 @@
 
     // File type mappings for downloadable files
     const FILE_TYPE_LABELS = {
-        sig_file_id: {label: "TRS Signature", success: true},
-        tro_file_id: {label: "TRO Declaration", success: true},
-        tsr_file_id: {label: "Trusted Timestamp", success: true},
-        stdout_file_id: {label: "Run output log", success: false},
-        stderr_file_id: {label: "Run error log", success: false},
-        replpack_file_id: {label: "Replicated Package", success: true},
+        sig_file_id: { label: "TRS Signature", success: true },
+        tro_file_id: { label: "TRO Declaration", success: true },
+        tsr_file_id: { label: "Trusted Timestamp", success: true },
+        stdout_file_id: { label: "Run output log", success: false },
+        stderr_file_id: { label: "Run error log", success: false },
+        replpack_file_id: { label: "Replicated Package", success: true },
     };
 
     function getDownloadableFiles() {
@@ -173,7 +176,7 @@
                         if (match) {
                             return {
                                 timestamp: match[1],
-                                message: (match[2].trim() || logString),
+                                message: match[2].trim() || logString,
                             };
                         }
 
@@ -452,6 +455,19 @@
                 return "help";
         }
     }
+
+    async function copyJobId() {
+        if (!jobDetails || !jobDetails._id) return;
+        try {
+            await navigator.clipboard.writeText(jobDetails._id);
+            jobIdCopied = true;
+            setTimeout(() => {
+                jobIdCopied = false;
+            }, 2000);
+        } catch (error) {
+            console.error("Failed to copy job ID:", error);
+        }
+    }
 </script>
 
 <div class="job-monitor-container md-card">
@@ -496,7 +512,22 @@
                             <span class="material-icons">fingerprint</span>
                             <div>
                                 <div class="job-label">Job ID</div>
-                                <div class="job-id">{jobDetails._id}</div>
+                                <div class="job-id-row">
+                                    <div class="job-id">{jobDetails._id}</div>
+                                    <button
+                                        class="copy-job-id-button"
+                                        on:click={copyJobId}
+                                        type="button"
+                                        title="Copy Job ID to clipboard"
+                                        aria-label="Copy Job ID"
+                                    >
+                                        <span class="material-icons">
+                                            {jobIdCopied
+                                                ? "check"
+                                                : "content_copy"}
+                                        </span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -682,7 +713,9 @@
                                     >
                                     <span>Error Log</span>
                                 </div>
-                                <pre class="log-content">{jobDetails.log.join('')}</pre>
+                                <pre class="log-content">{jobDetails.log.join(
+                                        "",
+                                    )}</pre>
                             </div>
                         {/if}
 
@@ -840,6 +873,40 @@
         display: flex;
         align-items: center;
         gap: var(--md-spacing-sm);
+    }
+
+    .job-id-row {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+    }
+
+    .copy-job-id-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--md-spacing-xs);
+        background-color: transparent;
+        border: 1px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-xs);
+        color: var(--md-on-surface-variant);
+        cursor: pointer;
+        transition: all var(--md-transition-standard);
+        flex-shrink: 0;
+    }
+
+    .copy-job-id-button:hover {
+        background-color: var(--md-surface-variant);
+        color: var(--md-primary);
+        border-color: var(--md-primary);
+    }
+
+    .copy-job-id-button .material-icons {
+        font-size: 18px;
+    }
+
+    .copy-job-id-button:active {
+        transform: scale(0.95);
     }
 
     .submission-label,
