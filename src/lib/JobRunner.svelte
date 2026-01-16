@@ -502,31 +502,6 @@
         gap: var(--md-spacing-md);
     }
 
-    .divider {
-        position: relative;
-        text-align: center;
-        margin: var(--md-spacing-lg) 0;
-    }
-
-    .divider::before {
-        content: "";
-        position: absolute;
-        top: 50%;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background-color: var(--md-outline-variant);
-    }
-
-    .divider-text {
-        background-color: var(--md-surface);
-        padding: 0 var(--md-spacing-md);
-        color: var(--md-on-surface-variant);
-        font-size: var(--md-font-body2);
-        font-weight: 500;
-        position: relative;
-    }
-
     .config-section {
         display: flex;
         flex-direction: column;

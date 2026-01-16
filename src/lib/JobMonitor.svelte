@@ -496,6 +496,12 @@
         const date = new Date(timestamp);
         return isNaN(date.getTime()) ? "N/A" : date.toLocaleTimeString();
     }
+
+    function formatFullDate(timestamp: string): string {
+        const date = new Date(timestamp);
+        if (isNaN(date.getTime())) return "N/A";
+        return date.toLocaleString();
+    }
 </script>
 
 <div class="job-monitor-container md-card">
@@ -540,26 +546,34 @@
 
                         <div class="job-id-info">
                             <span class="material-icons">fingerprint</span>
-                            <div>
+                            <div class="job-id-content">
                                 <div class="job-label">Job ID</div>
-                                <div class="job-id-row">
-                                    <div class="job-id">{jobDetails._id}</div>
-                                    <button
-                                        class="copy-job-id-button"
-                                        type="button"
-                                        title="Copy Job ID to clipboard"
-                                        aria-label="Copy Job ID"
-                                        on:click={copyJobId}
-                                    >
-                                        <span class="material-icons">
-                                            {jobIdCopied
-                                                ? "check"
-                                                : "content_copy"}
-                                        </span>
-                                    </button>
+                                <div class="job-id">{jobDetails._id}</div>
+                            </div>
+                            <button
+                                class="copy-job-id-button"
+                                type="button"
+                                title="Copy Job ID to clipboard"
+                                aria-label="Copy Job ID"
+                                on:click={copyJobId}
+                            >
+                                <span class="material-icons">
+                                    {jobIdCopied ? "check" : "content_copy"}
+                                </span>
+                            </button>
+                        </div>
+
+                        {#if jobDetails.created}
+                            <div class="job-timestamp-info">
+                                <span class="material-icons">schedule</span>
+                                <div>
+                                    <div class="job-label">Submitted</div>
+                                    <div class="job-timestamp">
+                                        {formatFullDate(jobDetails.created)}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        {/if}
                     </div>
 
                     <div class="job-status">
@@ -892,25 +906,37 @@
     .job-info {
         flex: 1;
         display: flex;
-        flex-direction: column;
-        gap: var(--md-spacing-sm);
+        flex-wrap: wrap;
+        gap: var(--md-spacing-md);
     }
 
     .submission-info,
-    .job-id-info {
+    .job-id-info,
+    .job-timestamp-info {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: var(--md-spacing-xs);
+        flex: 1 1 auto;
+        min-width: 180px;
     }
 
-    .job-id-row {
-        display: flex;
+    .job-id-info {
         align-items: center;
-        gap: var(--md-spacing-xs);
+    }
+
+    .job-id-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .submission-info .material-icons,
+    .job-id-info .material-icons,
+    .job-timestamp-info .material-icons {
+        margin-top: 2px;
     }
 
     .copy-job-id-button {
-        display: flex;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
         padding: var(--md-spacing-xs);
@@ -949,7 +975,8 @@
         color: var(--md-primary);
     }
 
-    .job-id {
+    .job-id,
+    .job-timestamp {
         font-family: "Courier New", monospace;
         font-size: var(--md-font-body2);
         color: var(--md-on-surface);
