@@ -468,6 +468,11 @@
             console.error("Failed to copy job ID:", error);
         }
     }
+
+    function formatTimestamp(timestamp) {
+        const date = new Date(timestamp);
+        return isNaN(date.getTime()) ? "N/A" : date.toLocaleTimeString();
+    }
 </script>
 
 <div class="job-monitor-container md-card">
@@ -516,10 +521,10 @@
                                     <div class="job-id">{jobDetails._id}</div>
                                     <button
                                         class="copy-job-id-button"
-                                        on:click={copyJobId}
                                         type="button"
                                         title="Copy Job ID to clipboard"
                                         aria-label="Copy Job ID"
+                                        on:click={copyJobId}
                                     >
                                         <span class="material-icons">
                                             {jobIdCopied
@@ -552,10 +557,10 @@
                             <span>Status updating automatically</span>
                         </div>
                         <button
+                            class="cancel-button"
                             on:click={handleCancel}
                             disabled={jobDetails.status === 5 ||
                                 jobStatusText === "Canceling..."}
-                            class="cancel-button"
                         >
                             <span class="material-icons">stop</span>
                             Cancel Job
@@ -611,8 +616,8 @@
                                         <span>{logsConnectionError}</span>
                                         <button
                                             class="retry-logs-button"
-                                            on:click={connectToLogs}
                                             disabled={isConnectingToLogs}
+                                            on:click={connectToLogs}
                                         >
                                             Retry
                                         </button>
@@ -639,20 +644,13 @@
                                                 data-level={log.level}
                                             >
                                                 <span class="log-timestamp">
-                                                    {(() => {
-                                                        const date = new Date(
-                                                            log.timestamp,
-                                                        );
-                                                        return isNaN(
-                                                            date.getTime(),
-                                                        )
-                                                            ? "N/A"
-                                                            : date.toLocaleTimeString();
-                                                    })()}
+                                                    {formatTimestamp(
+                                                        log.timestamp,
+                                                    )}
                                                 </span>
-                                                <span class="log-message"
-                                                    >{log.message}</span
-                                                >
+                                                <span class="log-message">
+                                                    {log.message}
+                                                </span>
                                             </div>
                                         {/each}
                                     </div>
@@ -778,10 +776,10 @@
                                         >
                                     </div>
                                     <button
-                                        on:click={() =>
-                                            handleFileDownload(file.id)}
                                         class="download-button"
                                         type="button"
+                                        on:click={() =>
+                                            handleFileDownload(file.id)}
                                     >
                                         <span class="material-icons"
                                             >download</span
