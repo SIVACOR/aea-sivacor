@@ -161,8 +161,10 @@
 
 <div class="upload-widget md-card">
     <div class="upload-header">
-        <span class="material-icons upload-icon">cloud_upload</span>
-        <h3>File Upload</h3>
+        <div class="header-title">
+            <span class="material-icons upload-icon">cloud_upload</span>
+            <h3>File Upload</h3>
+        </div>
         <p class="upload-description">
             Select a ZIP or TAR archive for processing
         </p>
@@ -255,25 +257,32 @@
     }
 
     .upload-header {
-        text-align: center;
-        margin-bottom: var(--md-spacing-lg);
+        margin-bottom: var(--md-spacing-md);
+    }
+
+    .header-title {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-xs);
     }
 
     .upload-icon {
-        font-size: 3rem;
+        font-size: 1.5rem;
         color: var(--md-primary);
-        margin-bottom: var(--md-spacing-sm);
     }
 
     .upload-header h3 {
-        margin: 0 0 var(--md-spacing-xs) 0;
+        margin: 0;
         color: var(--md-on-surface);
+        font-size: 1.25rem;
     }
 
     .upload-description {
         color: var(--md-on-surface-variant);
-        font-size: var(--md-font-body2);
+        font-size: var(--md-font-caption);
         margin: 0;
+        padding-left: calc(1.5rem + var(--md-spacing-sm));
     }
 
     .error-banner {
@@ -313,13 +322,13 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: var(--md-spacing-xxl) var(--md-spacing-lg);
+        padding: var(--md-spacing-lg) var(--md-spacing-md);
         border: 2px dashed var(--md-outline);
         border-radius: var(--md-radius-md);
         background-color: var(--md-surface-variant);
         cursor: pointer;
         transition: all var(--md-transition-standard);
-        min-height: 120px;
+        min-height: 80px;
     }
 
     .file-input-label:hover {
@@ -328,9 +337,9 @@
     }
 
     .file-icon {
-        font-size: 2.5rem;
+        font-size: 1.75rem;
         color: var(--md-primary);
-        margin-bottom: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-xs);
     }
 
     .file-input-text {
@@ -353,21 +362,21 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: var(--md-spacing-md);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         background-color: var(--md-surface-variant);
         border-radius: var(--md-radius-sm);
-        margin-bottom: var(--md-spacing-lg);
+        margin-bottom: var(--md-spacing-md);
     }
 
     .file-info {
         display: flex;
         align-items: center;
-        gap: var(--md-spacing-md);
+        gap: var(--md-spacing-sm);
         flex: 1;
     }
 
     .file-type-icon {
-        font-size: 2rem;
+        font-size: 1.5rem;
         color: var(--md-primary);
     }
 
@@ -378,13 +387,15 @@
     .file-name {
         font-weight: 500;
         color: var(--md-on-surface);
-        margin-bottom: var(--md-spacing-xs);
+        font-size: var(--md-font-body2);
         word-break: break-word;
+        line-height: 1.3;
     }
 
     .file-size {
         font-size: var(--md-font-caption);
         color: var(--md-on-surface-variant);
+        margin-top: 2px;
     }
 
     .upload-button {
@@ -395,24 +406,24 @@
     }
 
     .upload-progress {
-        margin-bottom: var(--md-spacing-lg);
+        margin-bottom: var(--md-spacing-md);
     }
 
     .progress-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-xs);
     }
 
     .progress-label {
-        font-size: var(--md-font-body2);
+        font-size: var(--md-font-caption);
         color: var(--md-on-surface);
         font-weight: 500;
     }
 
     .progress-percent {
-        font-size: var(--md-font-body2);
+        font-size: var(--md-font-caption);
         color: var(--md-on-surface-variant);
         font-weight: 500;
     }
@@ -421,7 +432,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: var(--md-spacing-md);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         background-color: rgba(76, 175, 80, 0.1);
         border: 1px solid rgba(76, 175, 80, 0.3);
         border-radius: var(--md-radius-sm);
@@ -430,23 +441,25 @@
     .success-content {
         display: flex;
         align-items: center;
-        gap: var(--md-spacing-md);
+        gap: var(--md-spacing-sm);
     }
 
     .success-icon {
-        font-size: 2rem;
+        font-size: 1.5rem;
         color: var(--md-success);
     }
 
     .success-title {
         font-weight: 500;
         color: var(--md-success);
-        margin-bottom: var(--md-spacing-xs);
+        font-size: var(--md-font-body2);
+        line-height: 1.3;
     }
 
     .success-subtitle {
         font-size: var(--md-font-caption);
         color: var(--md-on-surface-variant);
+        margin-top: 2px;
     }
 
     @media (max-width: 768px) {

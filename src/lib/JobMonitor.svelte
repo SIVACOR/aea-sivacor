@@ -500,8 +500,10 @@
 
 <div class="job-monitor-container md-card">
     <div class="monitor-header">
-        <span class="material-icons monitor-icon">monitor</span>
-        <h2>SIVACOR Submission</h2>
+        <div class="header-title">
+            <span class="material-icons monitor-icon">monitor</span>
+            <h2>SIVACOR Submission</h2>
+        </div>
         <p class="monitor-description">Track and manage your last job</p>
     </div>
 
@@ -836,64 +838,69 @@
     }
 
     .monitor-header {
-        text-align: center;
-        margin-bottom: var(--md-spacing-xl);
-        padding-bottom: var(--md-spacing-lg);
-        border-bottom: 1px solid var(--md-outline-variant);
+        margin-bottom: var(--md-spacing-md);
+    }
+
+    .header-title {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-xs);
     }
 
     .monitor-icon {
-        font-size: 3rem;
+        font-size: 1.5rem;
         color: var(--md-primary);
-        margin-bottom: var(--md-spacing-sm);
     }
 
     .monitor-header h2 {
-        margin: 0 0 var(--md-spacing-xs) 0;
+        margin: 0;
         color: var(--md-on-surface);
+        font-size: 1.25rem;
     }
 
     .monitor-description {
         color: var(--md-on-surface-variant);
-        font-size: var(--md-font-body2);
+        font-size: var(--md-font-caption);
         margin: 0;
+        padding-left: calc(1.5rem + var(--md-spacing-sm));
     }
 
     .monitor-content {
         display: flex;
         flex-direction: column;
-        gap: var(--md-spacing-lg);
+        gap: var(--md-spacing-md);
     }
 
     .job-details-card {
         border: 1px solid var(--md-outline-variant);
         border-radius: var(--md-radius-sm);
-        padding: var(--md-spacing-lg);
+        padding: var(--md-spacing-md);
         background-color: var(--md-surface-variant);
         display: flex;
         flex-direction: column;
-        gap: var(--md-spacing-lg);
+        gap: var(--md-spacing-md);
     }
 
     .job-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        gap: var(--md-spacing-md);
+        gap: var(--md-spacing-sm);
     }
 
     .job-info {
         flex: 1;
         display: flex;
         flex-direction: column;
-        gap: var(--md-spacing-md);
+        gap: var(--md-spacing-sm);
     }
 
     .submission-info,
     .job-id-info {
         display: flex;
         align-items: center;
-        gap: var(--md-spacing-sm);
+        gap: var(--md-spacing-xs);
     }
 
     .job-id-row {
@@ -956,22 +963,23 @@
     .status-badge {
         display: flex;
         align-items: center;
-        gap: var(--md-spacing-xs);
-        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        gap: 4px;
+        padding: 6px var(--md-spacing-sm);
         background-color: rgba(var(--md-surface-tint-rgb), 0.08);
         border-radius: var(--md-radius-full);
         font-weight: 500;
+        font-size: var(--md-font-body2);
     }
 
     .status-icon {
-        font-size: 1.2rem;
+        font-size: 1rem;
     }
 
     .active-job-section {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: var(--md-spacing-md);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         background-color: rgba(var(--md-warning-rgb), 0.1);
         border: 1px solid rgba(var(--md-warning-rgb), 0.3);
         border-radius: var(--md-radius-sm);
@@ -980,9 +988,10 @@
     .polling-indicator {
         display: flex;
         align-items: center;
-        gap: var(--md-spacing-sm);
+        gap: var(--md-spacing-xs);
         color: var(--md-warning);
         font-weight: 500;
+        font-size: var(--md-font-body2);
     }
 
     .pulse-dot {
@@ -1019,12 +1028,13 @@
         width: 100%;
         display: flex;
         align-items: center;
-        gap: var(--md-spacing-sm);
-        padding: var(--md-spacing-md);
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         background: transparent;
         border: none;
         text-align: left;
         font-weight: 500;
+        font-size: var(--md-font-body2);
         color: var(--md-on-surface);
         cursor: pointer;
         transition: background-color var(--md-transition-standard);
@@ -1180,11 +1190,11 @@
     }
 
     .result-section {
-        padding: var(--md-spacing-lg);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         border-radius: var(--md-radius-sm);
         display: flex;
         flex-direction: column;
-        gap: var(--md-spacing-md);
+        gap: var(--md-spacing-sm);
     }
 
     .result-section.success {
@@ -1208,17 +1218,18 @@
     .result-header {
         display: flex;
         align-items: flex-start;
-        gap: var(--md-spacing-md);
+        gap: var(--md-spacing-sm);
     }
 
     .result-icon {
-        font-size: 2rem;
+        font-size: 1.5rem;
         margin-top: 2px;
     }
 
     .result-header h3 {
-        margin: 0 0 var(--md-spacing-xs) 0;
+        margin: 0 0 4px 0;
         color: inherit;
+        font-size: 1.125rem;
     }
 
     .result-header p {
@@ -1247,13 +1258,14 @@
     .new-job-button {
         display: flex;
         align-items: center;
-        gap: var(--md-spacing-sm);
-        padding: var(--md-spacing-md) var(--md-spacing-lg);
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         background-color: var(--md-primary);
         color: white;
+        font-size: var(--md-font-body2);
         font-weight: 500;
         align-self: flex-start;
-        margin-top: var(--md-spacing-sm);
+        margin-top: 0;
     }
 
     .error-log {
@@ -1271,14 +1283,15 @@
     .section-header {
         display: flex;
         align-items: center;
-        gap: var(--md-spacing-sm);
-        margin-bottom: var(--md-spacing-md);
+        gap: var(--md-spacing-xs);
+        margin-bottom: var(--md-spacing-sm);
         color: var(--md-on-surface);
     }
 
     .section-header h4 {
         margin: 0;
         color: var(--md-on-surface);
+        font-size: 1rem;
     }
 
     .logs-container {
@@ -1329,7 +1342,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: var(--md-spacing-md);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         background-color: var(--md-surface);
         border: 1px solid var(--md-outline-variant);
         border-radius: var(--md-radius-sm);
@@ -1389,19 +1402,20 @@
 
     .empty-state {
         text-align: center;
-        padding: var(--md-spacing-xxl);
+        padding: var(--md-spacing-xl);
         color: var(--md-on-surface-variant);
     }
 
     .empty-icon {
-        font-size: 4rem;
+        font-size: 3rem;
         opacity: 0.5;
-        margin-bottom: var(--md-spacing-md);
+        margin-bottom: var(--md-spacing-sm);
     }
 
     .empty-state h4 {
-        margin: 0 0 var(--md-spacing-sm) 0;
+        margin: 0 0 var(--md-spacing-xs) 0;
         color: var(--md-on-surface-variant);
+        font-size: 1rem;
     }
 
     @keyframes pulse {

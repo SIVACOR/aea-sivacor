@@ -19,7 +19,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 1rem;
+        padding: 0.5rem 1rem;
         background-color: #ffcc00;
         color: #333;
         position: fixed;
@@ -36,7 +36,9 @@
     button {
         background: none;
         border: none;
-        font-size: 1.5rem;
+        font-size: 1.25rem;
         cursor: pointer;
+        padding: 0.25rem;
+        line-height: 1;
     }
 </style>

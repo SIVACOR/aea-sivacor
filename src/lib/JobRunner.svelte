@@ -290,32 +290,27 @@
 
 <div class="job-runner-container md-card">
     <div class="runner-header">
-        <span class="material-icons runner-icon">play_circle</span>
-        <h3>New Submission</h3>
+        <div class="header-title">
+            <span class="material-icons runner-icon">play_circle</span>
+            <h3>New Submission</h3>
+        </div>
         <p class="runner-description">
-            Upload a single file (tarball or zipball), choose a Docker image and
-            tag, then specify your main execution file to run your job.
+            Upload a file, select Docker image and tag, then specify your main
+            execution file.
         </p>
     </div>
 
     <div class="runner-content">
         <FileUploader on:uploadcomplete={handleUploadComplete} />
 
-        <div class="divider">
-            <span class="divider-text">Replication Workflow</span>
-        </div>
-
         <div class="config-section">
             {#each configEntries as entry, index (entry.id)}
                 <div class="config-row">
-                    <h4>Step {index + 1}</h4>
+                    <div class="step-badge">{index + 1}</div>
                     <div class="config-widgets">
                         <!-- Docker Image Selection -->
                         <div class="input-group">
                             <label for="image-select-{entry.id}">
-                                <span class="material-icons label-icon"
-                                    >settings</span
-                                >
                                 Docker Image
                             </label>
                             {#if imagesLoading}
@@ -351,9 +346,6 @@
                         <!-- Image Tag Selection -->
                         <div class="input-group">
                             <label for="tag-select-{entry.id}">
-                                <span class="material-icons label-icon"
-                                    >local_offer</span
-                                >
                                 Image Tag
                             </label>
                             {#if imagesLoading}
@@ -387,9 +379,6 @@
                         <!-- Main Filename -->
                         <div class="input-group">
                             <label for="execution-file-{entry.id}">
-                                <span class="material-icons label-icon"
-                                    >code</span
-                                >
                                 Main Filename
                             </label>
                             <input
@@ -400,6 +389,10 @@
                                 placeholder="e.g., main.do, main.R"
                                 class="file-input"
                             />
+                            <div class="input-hint">
+                                💡 Common: <code>main.do</code> (Stata),
+                                <code>main.R</code> (R)
+                            </div>
                         </div>
                     </div>
 
@@ -428,12 +421,6 @@
                 <span class="material-icons">add</span>
                 Add Step
             </button>
-
-            <div class="input-hint">
-                <span class="material-icons hint-icon">lightbulb</span>
-                Common values: <code>main.do</code> for Stata,
-                <code>main.R</code> for R
-            </div>
 
             <button
                 on:click={runJob}
@@ -481,33 +468,38 @@
     }
 
     .runner-header {
-        text-align: center;
-        margin-bottom: var(--md-spacing-xl);
-        padding-bottom: var(--md-spacing-lg);
-        border-bottom: 1px solid var(--md-outline-variant);
+        margin-bottom: var(--md-spacing-md);
+    }
+
+    .header-title {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-xs);
     }
 
     .runner-icon {
-        font-size: 3rem;
+        font-size: 1.5rem;
         color: var(--md-primary);
-        margin-bottom: var(--md-spacing-sm);
     }
 
     .runner-header h3 {
-        margin: 0 0 var(--md-spacing-xs) 0;
+        margin: 0;
         color: var(--md-on-surface);
+        font-size: 1.25rem;
     }
 
     .runner-description {
         color: var(--md-on-surface-variant);
-        font-size: var(--md-font-body2);
+        font-size: var(--md-font-caption);
         margin: 0;
+        padding-left: calc(1.5rem + var(--md-spacing-sm));
     }
 
     .runner-content {
         display: flex;
         flex-direction: column;
-        gap: var(--md-spacing-lg);
+        gap: var(--md-spacing-md);
     }
 
     .divider {
@@ -538,23 +530,37 @@
     .config-section {
         display: flex;
         flex-direction: column;
-        gap: var(--md-spacing-lg);
+        gap: var(--md-spacing-md);
     }
 
     .config-row {
         display: flex;
         align-items: flex-start;
-        gap: var(--md-spacing-md);
-        padding: var(--md-spacing-md);
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         border: 1px solid var(--md-outline-variant);
         border-radius: var(--md-radius-md);
         background: var(--md-surface-container-lowest);
     }
 
+    .step-badge {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 28px;
+        height: 28px;
+        background: var(--md-primary);
+        color: white;
+        border-radius: 50%;
+        font-size: 0.875rem;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+
     .config-widgets {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
-        gap: var(--md-spacing-md);
+        gap: var(--md-spacing-sm);
         flex: 1;
         align-items: start;
     }
@@ -562,44 +568,39 @@
     .input-group {
         display: flex;
         flex-direction: column;
-        gap: var(--md-spacing-xs);
+        gap: 4px;
         min-width: 0; /* Allow shrinking */
     }
 
     .input-group label {
-        display: flex;
-        align-items: center;
-        gap: var(--md-spacing-xs);
         font-weight: 500;
-        color: var(--md-on-surface);
-    }
-
-    .label-icon {
-        font-size: 20px;
-        color: var(--md-primary);
+        font-size: var(--md-font-caption);
+        color: var(--md-on-surface-variant);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     .loading-state {
         display: flex;
         align-items: center;
-        gap: var(--md-spacing-sm);
-        padding: var(--md-spacing-md);
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm);
         background-color: var(--md-surface-variant);
         border-radius: var(--md-radius-xs);
-        font-size: var(--md-font-body2);
+        font-size: var(--md-font-caption);
         color: var(--md-on-surface-variant);
     }
 
     .error-state {
         display: flex;
         align-items: center;
-        gap: var(--md-spacing-sm);
-        padding: var(--md-spacing-md);
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm);
         background-color: rgba(244, 67, 54, 0.1);
         color: var(--md-error);
         border: 1px solid rgba(244, 67, 54, 0.3);
         border-radius: var(--md-radius-xs);
-        font-size: var(--md-font-body2);
+        font-size: var(--md-font-caption);
     }
 
     select {
@@ -608,7 +609,25 @@
         background-repeat: no-repeat;
         background-position: right 12px center;
         background-size: 12px;
+        padding: var(--md-spacing-sm);
         padding-right: 40px;
+        border: 2px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-xs);
+        background-color: var(--md-surface);
+        color: var(--md-on-surface);
+        font-size: var(--md-font-body2);
+        transition: border-color var(--md-transition-standard);
+    }
+
+    select:focus {
+        outline: none;
+        border-color: var(--md-primary);
+    }
+
+    select:disabled {
+        background-color: var(--md-surface-variant);
+        color: var(--md-on-surface-variant);
+        cursor: not-allowed;
     }
 
     .disabled-select {
@@ -617,19 +636,23 @@
         background-repeat: no-repeat;
         background-position: right 12px center;
         background-size: 12px;
+        padding: var(--md-spacing-sm);
         padding-right: 40px;
+        border: 2px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-xs);
         background-color: var(--md-surface-variant);
         color: var(--md-on-surface-variant);
         cursor: not-allowed;
+        font-size: var(--md-font-body2);
     }
 
     .file-input {
-        padding: var(--md-spacing-md);
+        padding: var(--md-spacing-sm);
         border: 2px solid var(--md-outline-variant);
         border-radius: var(--md-radius-xs);
         background-color: var(--md-surface);
         color: var(--md-on-surface);
-        font-size: var(--md-font-body1);
+        font-size: var(--md-font-body2);
         transition: border-color var(--md-transition-standard);
     }
 
@@ -645,17 +668,10 @@
     }
 
     .input-hint {
-        display: flex;
-        align-items: center;
-        gap: var(--md-spacing-xs);
         font-size: var(--md-font-caption);
         color: var(--md-on-surface-variant);
-        margin-top: var(--md-spacing-xs);
-    }
-
-    .hint-icon {
-        font-size: 16px;
-        color: var(--md-primary);
+        margin: -12px 0 0 0;
+        line-height: 1.2;
     }
 
     .input-hint code {
@@ -672,12 +688,12 @@
         align-items: center;
         justify-content: center;
         gap: var(--md-spacing-sm);
-        padding: var(--md-spacing-md) var(--md-spacing-lg);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         background-color: var(--md-success);
         color: white;
-        font-size: var(--md-font-body1);
+        font-size: var(--md-font-body2);
         font-weight: 500;
-        min-height: 56px;
+        min-height: 44px;
         transition: all var(--md-transition-standard);
     }
 
@@ -766,8 +782,8 @@
     .status-banner {
         display: flex;
         align-items: flex-start;
-        gap: var(--md-spacing-md);
-        padding: var(--md-spacing-md);
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         border-radius: var(--md-radius-sm);
         animation: slideIn 0.3s ease-out;
     }
@@ -785,7 +801,7 @@
     }
 
     .status-icon {
-        font-size: 1.5rem;
+        font-size: 1.25rem;
         margin-top: 2px;
     }
 
@@ -795,13 +811,15 @@
 
     .status-message {
         font-weight: 500;
-        margin-bottom: var(--md-spacing-xs);
+        font-size: var(--md-font-body2);
+        line-height: 1.3;
     }
 
     .job-id {
         font-size: var(--md-font-caption);
         opacity: 0.8;
         font-family: "Courier New", monospace;
+        margin-top: 4px;
     }
 
     @keyframes slideIn {
@@ -816,8 +834,8 @@
     }
 
     @media (max-width: 768px) {
-        .runner-header {
-            padding-bottom: var(--md-spacing-md);
+        .header-title {
+            flex-direction: row;
         }
 
         .run-button {

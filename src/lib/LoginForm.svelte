@@ -116,8 +116,10 @@
     {:else if providers && providers.length > 0}
         <div class="login-content">
             <div class="login-header">
-                <span class="material-icons login-icon">login</span>
-                <h2>Sign In</h2>
+                <div class="header-title">
+                    <span class="material-icons login-icon">login</span>
+                    <h2>Sign In</h2>
+                </div>
                 <p class="login-subtitle">
                     Choose your authentication provider to continue
                 </p>
@@ -198,49 +200,52 @@
     }
 
     .loading-state {
-        padding: var(--md-spacing-xxl) var(--md-spacing-lg);
+        padding: var(--md-spacing-xl) var(--md-spacing-lg);
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: var(--md-spacing-md);
+        gap: var(--md-spacing-sm);
     }
 
     .loading-text {
         color: var(--md-on-surface-variant);
-        font-size: var(--md-font-body2);
+        font-size: var(--md-font-caption);
         margin: 0;
     }
 
     .error-state {
-        padding: var(--md-spacing-xxl) var(--md-spacing-lg);
+        padding: var(--md-spacing-xl) var(--md-spacing-lg);
     }
 
     .error-icon {
-        font-size: 4rem;
+        font-size: 3rem;
         color: var(--md-error);
-        margin-bottom: var(--md-spacing-md);
+        margin-bottom: var(--md-spacing-sm);
     }
 
     .error-state h3 {
         color: var(--md-error);
-        margin-bottom: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-xs);
+        font-size: 1.25rem;
     }
 
     .error-message {
         color: var(--md-error);
         font-weight: 500;
-        margin-bottom: var(--md-spacing-sm);
+        font-size: var(--md-font-body2);
+        margin-bottom: var(--md-spacing-xs);
     }
 
     .error-description {
         color: var(--md-on-surface-variant);
-        margin-bottom: var(--md-spacing-lg);
+        font-size: var(--md-font-body2);
+        margin-bottom: var(--md-spacing-md);
     }
 
     .error-actions {
         display: flex;
         flex-direction: column;
-        gap: var(--md-spacing-md);
+        gap: var(--md-spacing-sm);
         align-items: center;
     }
 
@@ -248,14 +253,14 @@
     .support-button {
         display: flex;
         align-items: center;
-        gap: var(--md-spacing-sm);
-        padding: var(--md-spacing-md) var(--md-spacing-lg);
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         border-radius: var(--md-radius-sm);
-        font-size: var(--md-font-body1);
+        font-size: var(--md-font-body2);
         font-weight: 500;
         cursor: pointer;
         transition: all var(--md-transition-standard);
-        min-width: 200px;
+        min-width: 180px;
         justify-content: center;
         text-transform: none;
     }
@@ -292,42 +297,51 @@
     }
 
     .login-content {
-        padding: var(--md-spacing-xl) var(--md-spacing-lg);
+        padding: var(--md-spacing-lg) var(--md-spacing-md);
     }
 
     .login-header {
-        margin-bottom: var(--md-spacing-xl);
-    }
-
-    .login-icon {
-        font-size: 4rem;
-        color: var(--md-primary);
         margin-bottom: var(--md-spacing-md);
     }
 
+    .header-title {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-xs);
+    }
+
+    .login-icon {
+        font-size: 1.5rem;
+        color: var(--md-primary);
+    }
+
     .login-header h2 {
-        margin-bottom: var(--md-spacing-sm);
+        margin: 0;
         color: var(--md-on-surface);
+        font-size: 1.25rem;
     }
 
     .login-subtitle {
         color: var(--md-on-surface-variant);
-        font-size: var(--md-font-body2);
+        font-size: var(--md-font-caption);
         margin: 0;
+        text-align: center;
     }
 
     .providers-list {
         display: flex;
         flex-direction: column;
-        gap: var(--md-spacing-md);
-        margin-bottom: var(--md-spacing-xl);
+        gap: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-lg);
     }
 
     .provider-button {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: var(--md-spacing-md) var(--md-spacing-lg);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
         background-color: var(--md-surface);
         border: 1px solid var(--md-outline);
         border-radius: var(--md-radius-md);
@@ -335,9 +349,9 @@
         cursor: pointer;
         transition: all var(--md-transition-standard);
         text-transform: none;
-        font-size: var(--md-font-body1);
+        font-size: var(--md-font-body2);
         font-weight: 500;
-        min-height: 56px;
+        min-height: 44px;
         position: relative;
         overflow: hidden;
     }
@@ -382,14 +396,14 @@
 
     .login-footer {
         border-top: 1px solid var(--md-outline-variant);
-        padding-top: var(--md-spacing-lg);
+        padding-top: var(--md-spacing-md);
     }
 
     .docs-links {
         display: flex;
         justify-content: center;
-        gap: var(--md-spacing-md);
-        margin-bottom: var(--md-spacing-lg);
+        gap: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-md);
         flex-wrap: wrap;
     }
 
@@ -443,18 +457,19 @@
     }
 
     .empty-state {
-        padding: var(--md-spacing-xxl) var(--md-spacing-lg);
+        padding: var(--md-spacing-xl) var(--md-spacing-lg);
     }
 
     .empty-icon {
-        font-size: 4rem;
+        font-size: 3rem;
         color: var(--md-warning);
-        margin-bottom: var(--md-spacing-md);
+        margin-bottom: var(--md-spacing-sm);
     }
 
     .empty-state h3 {
         color: var(--md-on-surface);
-        margin-bottom: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-xs);
+        font-size: 1.25rem;
     }
 
     .empty-state p {
