@@ -197,6 +197,37 @@ export async function checkAuthentication() {
 }
 
 /**
+ * Updates the current user's email address.
+ * @param {string} newEmail - The new email address to set.
+ * @returns {Promise<User>} The updated user object.
+ */
+export async function updateUserEmail(newEmail: string): Promise<User> {
+    const currentUser = getCurrentUser();
+    if (!currentUser || !currentUser._id) {
+        throw new Error('User not logged in or user ID not available.');
+    }
+
+    // API requires firstName and lastName to be sent along with email as query parameters
+    const firstName = currentUser.firstName || currentUser.login || 'User';
+    const lastName = currentUser.lastName || '';
+
+    const query = new URLSearchParams({
+        email: newEmail,
+        firstName: firstName,
+        lastName: lastName,
+    });
+
+    const endpoint = `/user/${currentUser._id}?${query.toString()}`;
+    const response = await api(endpoint, {
+        method: 'PUT',
+    });
+
+    // Update the user store with the new data
+    user.set(response);
+    return response;
+}
+
+/**
  * Logs out the user.
  */
 export async function logout() {
