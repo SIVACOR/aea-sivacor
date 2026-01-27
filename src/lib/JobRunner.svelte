@@ -3,6 +3,8 @@
     import { createEventDispatcher } from "svelte";
     import { submitJob, getImages } from "./api";
     import FileUploader from "./FileUploader.svelte";
+    import { hasInvalidOrcidEmail, user } from "./stores";
+    import EmailUpdateModal from "./EmailUpdateModal.svelte";
 
     // State for the dropdowns data
     /** @type {Record<string, string[]>} */
@@ -22,6 +24,9 @@
     let jobErrorMessage: string | null = null;
     /** @type {string | null} */
     let jobId: string | null = null;
+
+    // State for email update modal
+    let showEmailModal = false;
 
     // Flag to prevent saving during initial load
     let isInitializing = true;
@@ -428,9 +433,13 @@
                     !firstEntry?.executionFileName?.trim() ||
                     !firstEntry?.selectedImage ||
                     !firstEntry?.selectedTag ||
-                    isJobRunning}
+                    isJobRunning ||
+                    $hasInvalidOrcidEmail}
                 class="run-button"
                 class:running={isJobRunning}
+                title={$hasInvalidOrcidEmail
+                    ? "Cannot submit: Your ORCID account has an invalid email address. Please make your email at orcid.org public or contact support."
+                    : ""}
             >
                 {#if isJobRunning}
                     <div class="md-spinner"></div>
@@ -440,6 +449,37 @@
                     Run Replication Workflow
                 {/if}
             </button>
+            {#if $hasInvalidOrcidEmail}
+                <div class="email-warning">
+                    <span class="material-icons warning-icon">warning</span>
+                    <div class="warning-text">
+                        <strong>Action Required:</strong> Your ORCID account
+                        does not have a valid public email address. Please
+                        update your email:
+                        <div class="warning-actions">
+                            <button
+                                type="button"
+                                class="update-email-btn"
+                                on:click={() => (showEmailModal = true)}
+                            >
+                                <span class="material-icons">edit</span>
+                                Update Email Here
+                            </button>
+                            <span class="separator">or</span>
+                            <a
+                                href="https://orcid.org/my-orcid"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="orcid-link"
+                            >
+                                <span class="material-icons">open_in_new</span>
+                                Make Email Public at ORCiD.org
+                            </a>
+                            (after changing at ORCiD.org, you will need to relogin)
+                        </div>
+                    </div>
+                </div>
+            {/if}
         </div>
 
         {#if jobStatusMessage}
@@ -461,6 +501,10 @@
         {/if}
     </div>
 </div>
+<EmailUpdateModal
+    bind:show={showEmailModal}
+    currentEmail={$user?.email || ""}
+/>
 
 <style>
     .job-runner-container {
@@ -690,6 +734,93 @@
         background-color: var(--md-outline-variant) !important;
         color: var(--md-on-surface-variant) !important;
         transform: none !important;
+    }
+
+    .email-warning {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-md);
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: var(--md-radius-xs);
+        margin-top: var(--md-spacing-md);
+        color: #856404;
+    }
+
+    .warning-icon {
+        color: #ffc107;
+        flex-shrink: 0;
+    }
+
+    .warning-text {
+        font-size: var(--md-font-body2);
+        line-height: 1.5;
+        flex: 1;
+    }
+
+    .warning-text strong {
+        display: block;
+        margin-bottom: var(--md-spacing-sm);
+    }
+
+    .warning-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        margin-top: var(--md-spacing-sm);
+    }
+
+    .update-email-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-xs) var(--md-spacing-md);
+        background: var(--md-primary);
+        color: white;
+        border: none;
+        border-radius: var(--md-radius-xs);
+        font-size: var(--md-font-body2);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .update-email-btn:hover {
+        background: var(--md-primary-dark);
+        box-shadow: var(--md-shadow-sm);
+    }
+
+    .update-email-btn .material-icons {
+        font-size: 18px;
+    }
+
+    .separator {
+        color: #856404;
+        font-weight: 500;
+        padding: 0 var(--md-spacing-xs);
+    }
+
+    .orcid-link {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        color: #0056b3;
+        text-decoration: none;
+        font-weight: 500;
+        padding: var(--md-spacing-xs) var(--md-spacing-sm);
+        border-radius: var(--md-radius-xs);
+        transition: all 0.2s ease;
+    }
+
+    .orcid-link:hover {
+        background: rgba(0, 86, 179, 0.1);
+        text-decoration: underline;
+    }
+
+    .orcid-link .material-icons {
+        font-size: 18px;
     }
 
     .add-config-btn {
