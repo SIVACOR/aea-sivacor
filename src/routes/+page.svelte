@@ -121,14 +121,16 @@
     }
 
     /**
-     * Opens email client to send feedback email.
+     * Gets the feedback URL by replacing the current domain with feedback subdomain
      */
-    function sendFeedback() {
-        const subject = encodeURIComponent("SIVACOR Feedback");
-        const body = encodeURIComponent(
-            `Hello SIVACOR Team,\n\nI would like to provide feedback about the SIVACOR application.\n\nUser: ${$user ? `${($user as any).firstName} ${($user as any).lastName}` : "Anonymous"}\n\nFeedback:\n[Please share your feedback, suggestions, or feature requests here]\n\nThank you,`,
+    function getFeedbackUrl() {
+        const currentUrl = new URL($page.url);
+        const feedbackHost = currentUrl.hostname.replace(
+            /^[^.]*\./,
+            "feedback.",
         );
-        window.location.href = `mailto:support@sivacor.org?subject=${subject}&body=${body}`;
+        const feedbackUrl = `${currentUrl.protocol}//${feedbackHost}${currentUrl.port ? `:${currentUrl.port}` : ""}/`;
+        return feedbackUrl;
     }
 </script>
 
@@ -231,13 +233,15 @@
                         Contact Support
                     </button>
 
-                    <button
-                        on:click={sendFeedback}
+                    <a
+                        href={getFeedbackUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         class="support-button secondary"
                     >
                         <span class="material-icons">feedback</span>
                         Send Feedback
-                    </button>
+                    </a>
                 </div>
 
                 <div class="support-info">
