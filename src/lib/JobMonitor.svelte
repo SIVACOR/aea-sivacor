@@ -554,10 +554,10 @@
                                 class="copy-job-id-button"
                                 type="button"
                                 title="Copy Job ID to clipboard"
-                                aria-label="Copy Job ID"
+                                aria-label={jobIdCopied ? "Copied" : "Copy"}
                                 on:click={copyJobId}
                             >
-                                <span class="material-icons">
+                                <span class="material-icons" aria-hidden="true">
                                     {jobIdCopied ? "check" : "content_copy"}
                                 </span>
                             </button>
@@ -974,6 +974,12 @@
         transform: scale(0.95);
     }
 
+    .copy-job-id-button:focus-visible {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
+    }
+
     .submission-label,
     .job-label {
         font-size: var(--md-font-caption);
@@ -1055,6 +1061,12 @@
         color: var(--md-on-surface-variant) !important;
     }
 
+    .cancel-button:focus-visible {
+        outline: 3px solid var(--md-error-dark);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(244, 67, 54, 0.3);
+    }
+
     .live-logs-section {
         border: 1px solid var(--md-outline-variant);
         border-radius: var(--md-radius-sm);
@@ -1080,6 +1092,12 @@
 
     .logs-toggle-button:hover {
         background-color: var(--md-surface-variant);
+    }
+
+    .logs-toggle-button:focus-visible {
+        outline: 3px solid var(--md-primary);
+        outline-offset: -2px;
+        box-shadow: inset 0 0 0 4px rgba(25, 118, 210, 0.15);
     }
 
     .logs-toggle-icon {
@@ -1129,6 +1147,12 @@
         background-color: var(--md-secondary-container);
         color: var(--md-on-secondary-container);
         border-color: var(--md-secondary);
+    }
+
+    .clear-logs-button:focus-visible {
+        outline: 3px solid var(--md-secondary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(3, 218, 198, 0.2);
     }
 
     .clear-logs-button .material-icons {
@@ -1227,6 +1251,12 @@
         cursor: not-allowed;
     }
 
+    .retry-logs-button:focus-visible {
+        outline: 3px solid var(--md-error-dark);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(244, 67, 54, 0.3);
+    }
+
     .result-section {
         padding: var(--md-spacing-sm) var(--md-spacing-md);
         border-radius: var(--md-radius-sm);
@@ -1293,6 +1323,12 @@
         background-color: rgba(255, 255, 255, 0.1);
     }
 
+    .view-result-link:focus-visible {
+        outline: 3px solid currentColor;
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.1);
+    }
+
     .new-job-button {
         display: flex;
         align-items: center;
@@ -1304,6 +1340,12 @@
         font-weight: 500;
         align-self: flex-start;
         margin-top: 0;
+    }
+
+    .new-job-button:focus-visible {
+        outline: 3px solid var(--md-primary-dark);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.3);
     }
 
     .error-log {
@@ -1427,6 +1469,12 @@
     .download-button:disabled {
         background-color: var(--md-outline-variant) !important;
         color: var(--md-on-surface-variant) !important;
+    }
+
+    .download-button:focus-visible {
+        outline: 3px solid var(--md-success);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(48, 110, 52, 0.3);
     }
 
     .loading-state {

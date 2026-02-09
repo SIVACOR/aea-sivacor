@@ -624,7 +624,7 @@
 
     select {
         appearance: none;
-        background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'><path fill='%23666' d='M2 0L0 2h4zm0 5L0 3h4z'/></svg>");
+        background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5' role='img' aria-label='Dropdown arrow'><title>Dropdown arrow</title><path fill='%23666' d='M2 0L0 2h4zm0 5L0 3h4z'/></svg>");
         background-repeat: no-repeat;
         background-position: right 12px center;
         background-size: 12px;
@@ -651,7 +651,7 @@
 
     .disabled-select {
         appearance: none;
-        background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'><path fill='%23999' d='M2 0L0 2h4zm0 5L0 3h4z'/></svg>");
+        background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5' role='img' aria-label='Dropdown arrow'><title>Dropdown arrow</title><path fill='%23999' d='M2 0L0 2h4zm0 5L0 3h4z'/></svg>");
         background-repeat: no-repeat;
         background-position: right 12px center;
         background-size: 12px;
@@ -736,6 +736,12 @@
         transform: none !important;
     }
 
+    .run-button:focus-visible {
+        outline: 3px solid var(--md-success);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(48, 110, 52, 0.3);
+    }
+
     .email-warning {
         display: flex;
         align-items: flex-start;
@@ -749,7 +755,7 @@
     }
 
     .warning-icon {
-        color: #ffc107;
+        color: #d84315;
         flex-shrink: 0;
     }
 
@@ -792,6 +798,12 @@
         box-shadow: var(--md-shadow-sm);
     }
 
+    .update-email-btn:focus-visible {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.3);
+    }
+
     .update-email-btn .material-icons {
         font-size: 18px;
     }
@@ -817,6 +829,12 @@
     .orcid-link:hover {
         background: rgba(0, 86, 179, 0.1);
         text-decoration: underline;
+    }
+
+    .orcid-link:focus-visible {
+        outline: 3px solid #0056b3;
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(0, 86, 179, 0.2);
     }
 
     .orcid-link .material-icons {
@@ -855,6 +873,12 @@
         cursor: not-allowed;
     }
 
+    .add-config-btn:focus-visible {
+        outline: 3px solid var(--md-secondary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(3, 218, 198, 0.3);
+    }
+
     .remove-config-btn {
         display: flex;
         align-items: center;
@@ -878,6 +902,12 @@
 
     .remove-config-btn:active:not(:disabled) {
         transform: scale(0.95);
+    }
+
+    .remove-config-btn:focus-visible {
+        outline: 3px solid var(--md-error);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(244, 67, 54, 0.3);
     }
 
     .remove-config-btn:disabled {

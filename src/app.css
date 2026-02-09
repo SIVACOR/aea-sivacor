@@ -15,8 +15,8 @@
     --md-error-dark: #d32f2f;
     --md-warning: #ff9800;
     --md-warning-rgb: 255, 152, 0;
-    --md-success: #4caf50;
-    --md-success-rgb: 76, 175, 80;
+    --md-success: #306e34;
+    --md-success-rgb: 48, 110, 52;
     --md-info: #2196f3;
 
     /* Surface Colors */
@@ -26,7 +26,7 @@
     --md-surface-tint-rgb: 25, 118, 210;
     --md-background: #fafafa;
     --md-on-surface: #212121;
-    --md-on-surface-variant: #757575;
+    --md-on-surface-variant: #525252;
     --md-on-surface-variant-rgb: 117, 117, 117;
     --md-outline: #e0e0e0;
     --md-outline-variant: #eeeeee;
@@ -216,6 +216,13 @@ input[type="file"]:hover {
     background-color: rgba(25, 118, 210, 0.05);
 }
 
+input[type="file"]:focus-visible {
+    outline: 3px solid var(--md-primary);
+    outline-offset: 2px;
+    border-color: var(--md-primary);
+    box-shadow: 0 0 0 4px rgba(var(--md-primary-rgb), 0.2);
+}
+
 /* Material Design Button Styles */
 button {
     font-family: var(--md-font-family);
@@ -235,6 +242,19 @@ button {
     min-height: 36px;
     position: relative;
     overflow: hidden;
+}
+
+/* Keyboard Focus Indicators for Accessibility */
+button:focus-visible {
+    outline: 3px solid var(--md-primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(var(--md-primary-rgb), 0.2);
+}
+
+a:focus-visible {
+    outline: 3px solid var(--md-primary);
+    outline-offset: 2px;
+    border-radius: var(--md-radius-xs);
 }
 
 /* Primary Button */
@@ -268,6 +288,12 @@ button:not([class]):active {
     border-color: var(--md-primary);
 }
 
+.md-button-outlined:focus-visible {
+    outline: 3px solid var(--md-primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(var(--md-primary-rgb), 0.2);
+}
+
 /* Text Button */
 .md-button-text {
     background-color: transparent;
@@ -277,6 +303,12 @@ button:not([class]):active {
 
 .md-button-text:hover {
     background-color: rgba(25, 118, 210, 0.05);
+}
+
+.md-button-text:focus-visible {
+    outline: 3px solid var(--md-primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(var(--md-primary-rgb), 0.2);
 }
 
 /* Button States */
@@ -298,14 +330,32 @@ button:disabled {
     background-color: var(--md-error-dark);
 }
 
+.md-button-error:focus-visible {
+    outline: 3px solid var(--md-error);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(var(--md-error-rgb), 0.2);
+}
+
 .md-button-success {
     background-color: var(--md-success);
     color: white;
 }
 
+.md-button-success:focus-visible {
+    outline: 3px solid var(--md-success);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(var(--md-success-rgb), 0.2);
+}
+
 .md-button-warning {
     background-color: var(--md-warning);
     color: white;
+}
+
+.md-button-warning:focus-visible {
+    outline: 3px solid var(--md-warning);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(var(--md-warning-rgb), 0.2);
 }
 
 /* Material Design Cards */

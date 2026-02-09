@@ -267,6 +267,12 @@
         cursor: not-allowed;
     }
 
+    .close-button:focus-visible {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
+    }
+
     .modal-body {
         padding: var(--md-spacing-lg);
     }
@@ -407,6 +413,18 @@
     .md-button-filled:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+    }
+
+    .md-button-text:focus-visible {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
+    }
+
+    .md-button-filled:focus-visible {
+        outline: 3px solid var(--md-primary-dark);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.3);
     }
 
     .md-spinner.small {

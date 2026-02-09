@@ -296,6 +296,18 @@
         box-shadow: var(--md-elevation-1);
     }
 
+    .retry-button:focus-visible {
+        outline: 3px solid var(--md-primary-dark);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.3);
+    }
+
+    .support-button:focus-visible {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
+    }
+
     .login-content {
         padding: var(--md-spacing-lg) var(--md-spacing-md);
     }
@@ -369,6 +381,12 @@
         box-shadow: var(--md-elevation-1);
     }
 
+    .provider-button:focus-visible {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
+    }
+
     .provider-icon {
         color: var(--md-primary);
         transition: color var(--md-transition-standard);
@@ -435,6 +453,12 @@
     .docs-link:active {
         transform: translateY(0);
         box-shadow: none;
+    }
+
+    .docs-link:focus-visible {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
     }
 
     .docs-link .material-icons {
