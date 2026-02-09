@@ -336,7 +336,7 @@
         background-color: rgba(25, 118, 210, 0.05);
     }
 
-    .file-input:focus-visible + .file-input-label {
+    .upload-area:focus-within .file-input-label {
         outline: 3px solid var(--md-primary);
         outline-offset: 2px;
         border-color: var(--md-primary);
