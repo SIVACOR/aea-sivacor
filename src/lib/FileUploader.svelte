@@ -178,15 +178,6 @@
     {/if}
 
     <div class="upload-area" class:disabled={isUploading}>
-        <input
-            type="file"
-            bind:this={fileInput}
-            on:change={handleFileSelect}
-            disabled={isUploading}
-            id="file-input"
-            class="file-input"
-            accept=".zip,.tar,.tar.gz,.tgz,.tar.bz2,.tbz2,.tar.xz,.txz,application/zip,application/x-tar,application/gzip,application/x-gzip"
-        />
         <label for="file-input" class="file-input-label">
             <span class="material-icons file-icon">attach_file</span>
             <div class="file-input-text">
@@ -197,6 +188,15 @@
                 >
             </div>
         </label>
+        <input
+            type="file"
+            bind:this={fileInput}
+            on:change={handleFileSelect}
+            disabled={isUploading}
+            id="file-input"
+            class="file-input"
+            accept=".zip,.tar,.tar.gz,.tgz,.tar.bz2,.tbz2,.tar.xz,.txz,application/zip,application/x-tar,application/gzip,application/x-gzip"
+        />
     </div>
 
     {#if selectedFile && !isUploading}
@@ -336,6 +336,13 @@
         background-color: rgba(25, 118, 210, 0.05);
     }
 
+    .upload-area:focus-within .file-input-label {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
+        border-color: var(--md-primary);
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
+    }
+
     .file-icon {
         font-size: 1.75rem;
         color: var(--md-primary);
@@ -403,6 +410,12 @@
         background-color: var(--md-primary);
         color: white;
         min-width: auto;
+    }
+
+    .upload-button:focus-visible {
+        outline: 3px solid var(--md-primary-dark);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.3);
     }
 
     .upload-progress {

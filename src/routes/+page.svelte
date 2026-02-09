@@ -346,6 +346,12 @@
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
 
+    .nav-link:focus-visible {
+        outline: 3px solid var(--md-secondary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(3, 218, 198, 0.3);
+    }
+
     .nav-link .material-icons {
         font-size: 18px;
         color: var(--md-secondary);
@@ -399,6 +405,12 @@
     .logout-btn:hover {
         background-color: rgba(255, 255, 255, 0.1);
         border-color: white;
+    }
+
+    .logout-btn:focus-visible {
+        outline: 3px solid white;
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
     }
 
     .main-content {
@@ -485,6 +497,21 @@
     .support-button:active {
         transform: translateY(0);
         box-shadow: var(--md-elevation-1);
+    }
+
+    .support-button:focus-visible {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
+    }
+
+    .support-button.primary:focus-visible {
+        outline: 3px solid var(--md-primary-dark);
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.3);
+    }
+
+    .support-button.secondary:focus-visible {
+        outline: 3px solid var(--md-primary);
+        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
     }
 
     .support-info {

@@ -9,9 +9,9 @@
     }
 </script>
 
-<div class="banner">
+<div class="banner" role="region" aria-label="Notification banner">
     <p>{message}</p>
-    <button on:click={dismiss}>&times;</button>
+    <button on:click={dismiss} aria-label="Close notification">&times;</button>
 </div>
 
 <style>
@@ -40,5 +40,11 @@
         cursor: pointer;
         padding: 0.25rem;
         line-height: 1;
+    }
+
+    button:focus-visible {
+        outline: 3px solid #333;
+        outline-offset: 2px;
+        border-radius: 4px;
     }
 </style>
