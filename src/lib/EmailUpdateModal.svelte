@@ -415,11 +415,6 @@
         cursor: not-allowed;
     }
 
-    .md-button-text:focus-visible {
-        outline: 3px solid var(--md-primary);
-        outline-offset: 2px;
-        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
-    }
 
     .md-button-filled:focus-visible {
         outline: 3px solid var(--md-primary-dark);

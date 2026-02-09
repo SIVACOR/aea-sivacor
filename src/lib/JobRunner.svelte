@@ -651,7 +651,7 @@
 
     .disabled-select {
         appearance: none;
-        background-image: url("data:image/svg+xml;charset=US-ASCII,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5' role='img' aria-label='Dropdown arrow'><title>Dropdown arrow</title><path fill='%23999' d='M2 0L0 2h4zm0 5L0 3h4z'/></svg>");
+        background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%204%205'%3E%3Cpath%20fill='%23999'%20d='M2%200L0%202h4zm0%205L0%203h4z'/%3E%3C/svg%3E");
         background-repeat: no-repeat;
         background-position: right 12px center;
         background-size: 12px;
