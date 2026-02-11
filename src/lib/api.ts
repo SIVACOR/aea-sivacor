@@ -424,3 +424,56 @@ export async function cancelJob(jobId: string): Promise<any> {
         method: 'PUT'
     });
 }
+
+/**
+ * Fetches performance metrics for a specific stage from a submission folder.
+ * @param {string} folderId - The ID of the submission folder.
+ * @param {number} stageNumber - The stage number (1-indexed).
+ * @returns {Promise<any>} The performance metrics object.
+ */
+export async function fetchPerformanceMetrics(folderId: string, stageNumber: number): Promise<any> {
+    if (!folderId) {
+        throw new Error("Folder ID must be provided.");
+    }
+    if (stageNumber < 1) {
+        throw new Error("Stage number must be 1 or greater.");
+    }
+
+    const filename = `performance_data_stage_${stageNumber}.json`;
+
+    try {
+        // Get items in the folder
+        const items = await api(`/item?folderId=${folderId}&name=${encodeURIComponent(filename)}`);
+
+        if (!Array.isArray(items) || items.length === 0) {
+            return null; // Performance file doesn't exist for this stage
+        }
+
+        const item = items[0];
+
+        // Download the item content directly
+        const token = getGirderToken();
+        const headers: Record<string, string> = {};
+        if (token) {
+            headers['Girder-Token'] = token;
+        }
+
+        const response = await fetch(`${BASE_URL}/item/${item._id}/download`, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to download performance metrics: ${response.statusText}`);
+        }
+
+        // Read as text first and replace NaN with null before parsing
+        const text = await response.text();
+        const sanitizedText = text.replace(/:\s*NaN/g, ': null');
+        const metricsData = JSON.parse(sanitizedText);
+        return metricsData;
+    } catch (error) {
+        console.error(`Error fetching performance metrics for stage ${stageNumber}:`, error);
+        return null;
+    }
+}
