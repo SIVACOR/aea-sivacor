@@ -106,6 +106,40 @@ export async function getLatestSubmission(): Promise<Folder | null> {
 }
 
 /**
+ * Fetches a submission by ID or name from the Submissions collection.
+ * @param {string} idOrName - The submission folder ID or name.
+ * @returns {Promise<Folder | null>} The submission folder object or null if not found.
+ */
+export async function getSubmissionByIdOrName(idOrName: string): Promise<Folder | null> {
+    // First, try to get the Submissions collection
+    const collections = await api('/collection?name=Submissions');
+    if (!Array.isArray(collections) || collections.length !== 1) {
+        return null;
+    }
+    const collectionId = collections[0]._id;
+
+    // Try to fetch by ID first (assuming it's a folder ID)
+    try {
+        const folder = await api(`/folder/${idOrName}`);
+        // Verify it's actually in the Submissions collection
+        if (folder && folder.baseParentType === 'collection' && folder.baseParentId === collectionId) {
+            return folder;
+        }
+    } catch (error) {
+        // If fetching by ID fails, continue to try by name
+        console.log('Not a valid folder ID, trying by name...');
+    }
+
+    // Try to fetch by name
+    const submissions = await api(`/folder?parentType=collection&parentId=${collectionId}&name=${encodeURIComponent(idOrName)}&limit=1`);
+    if (Array.isArray(submissions) && submissions.length > 0) {
+        return submissions[0];
+    }
+
+    return null;
+}
+
+/**
  * Sets the authentication token in the preferred storage (e.g., as a cookie).
  * @param {string} token - The 'Girder-Token' value.
  */

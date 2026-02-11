@@ -6,6 +6,7 @@
         cancelJob,
         JOB_POLLING_INTERVAL,
         getLatestSubmission,
+        getSubmissionByIdOrName,
         getSubmissionFolderUrl,
         downloadFile,
         getGirderToken,
@@ -404,7 +405,36 @@
     async function checkLatestSubmission() {
         try {
             checkingLatestSubmission = true;
-            const submission = await getLatestSubmission();
+
+            // Check for URL query parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const submissionId = urlParams.get("submissionId");
+            const submissionName = urlParams.get("submissionName");
+
+            let submission = null;
+
+            // Try to get submission by ID or name if provided in URL
+            if (submissionId) {
+                submission = await getSubmissionByIdOrName(submissionId);
+                if (!submission) {
+                    console.warn(
+                        `Submission with ID "${submissionId}" not found. Falling back to latest submission.`,
+                    );
+                }
+            } else if (submissionName) {
+                submission = await getSubmissionByIdOrName(submissionName);
+                if (!submission) {
+                    console.warn(
+                        `Submission with name "${submissionName}" not found. Falling back to latest submission.`,
+                    );
+                }
+            }
+
+            // If no URL parameter provided or submission not found, get the latest
+            if (!submission) {
+                submission = await getLatestSubmission();
+            }
+
             latestSubmission = submission;
 
             if (submission && submission.meta && submission.meta.job_id) {
