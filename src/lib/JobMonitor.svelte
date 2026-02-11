@@ -10,6 +10,7 @@
         downloadFile,
         getGirderToken,
         getGirderUrl,
+        fetchPerformanceMetrics,
     } from "./api";
     import JobRunner from "./JobRunner.svelte";
 
@@ -52,6 +53,14 @@
 
     // Copy to clipboard state
     let jobIdCopied = false;
+
+    // Performance metrics state
+    let performanceMetrics: Array<{
+        stageNumber: number;
+        stageName: string;
+        data: any;
+    }> = [];
+    let isLoadingMetrics = false;
 
     $: showRunner = !isMonitoring && !currentJobId && !checkingLatestSubmission;
 
@@ -309,6 +318,8 @@
 
             if (details.status >= 3) {
                 stopPolling();
+                // Load performance metrics when job finishes (success or error)
+                await loadPerformanceMetrics();
             }
 
             if (details.status === 4) {
@@ -381,6 +392,8 @@
         isLogsVisible = false;
         streamingLogs = [];
         logsConnectionError = null;
+        performanceMetrics = [];
+        isLoadingMetrics = false;
 
         // Dispatch job reset for title management
         dispatch("jobreset", {
@@ -502,6 +515,86 @@
         if (isNaN(date.getTime())) return "N/A";
         return date.toLocaleString();
     }
+
+    async function loadPerformanceMetrics() {
+        if (
+            !latestSubmission ||
+            !latestSubmission._id ||
+            !latestSubmission.meta?.stages
+        ) {
+            return;
+        }
+
+        isLoadingMetrics = true;
+        performanceMetrics = [];
+
+        try {
+            const stages = latestSubmission.meta.stages;
+
+            // Fetch performance metrics for each stage
+            const metricsPromises = stages.map(
+                async (stage: any, index: number) => {
+                    const stageNumber = index + 1;
+                    const metrics = await fetchPerformanceMetrics(
+                        latestSubmission._id,
+                        stageNumber,
+                    );
+
+                    if (metrics) {
+                        return {
+                            stageNumber,
+                            stageName: `${stage.image_name}:${stage.image_tag} - ${stage.main_file}`,
+                            data: metrics,
+                        };
+                    }
+                    return null;
+                },
+            );
+
+            const results = await Promise.all(metricsPromises);
+            performanceMetrics = results.filter((m) => m !== null) as Array<{
+                stageNumber: number;
+                stageName: string;
+                data: any;
+            }>;
+        } catch (error) {
+            console.error("Error loading performance metrics:", error);
+        } finally {
+            isLoadingMetrics = false;
+        }
+    }
+
+    function formatBytes(bytes: number): string {
+        if (bytes === 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return (
+            Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+        );
+    }
+
+    function formatDuration(startedAt: string, finishedAt: string): string {
+        const start = new Date(startedAt);
+        const finish = new Date(finishedAt);
+
+        if (isNaN(start.getTime()) || isNaN(finish.getTime())) {
+            return "N/A";
+        }
+
+        const durationMs = finish.getTime() - start.getTime();
+        const seconds = Math.floor(durationMs / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+
+        if (hours > 0) {
+            return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+        } else if (minutes > 0) {
+            return `${minutes}m ${seconds % 60}s`;
+        } else {
+            return `${seconds}s`;
+        }
+    }
 </script>
 
 <div class="job-monitor-container md-card">
@@ -554,7 +647,9 @@
                                 class="copy-job-id-button"
                                 type="button"
                                 title="Copy Job ID to clipboard"
-                                aria-label={jobIdCopied ? "Copied Job ID" : "Copy Job ID"}
+                                aria-label={jobIdCopied
+                                    ? "Copied Job ID"
+                                    : "Copy Job ID"}
                                 on:click={copyJobId}
                             >
                                 <span class="material-icons" aria-hidden="true">
@@ -839,6 +934,115 @@
                                 </div>
                             {/each}
                         </div>
+                    </div>
+                {/if}
+
+                <!-- Display performance metrics if job finished -->
+                {#if !isJobActive && performanceMetrics.length > 0}
+                    <div class="performance-section">
+                        <div class="section-header">
+                            <span class="material-icons">speed</span>
+                            <h4>Performance Metrics</h4>
+                        </div>
+                        {#each performanceMetrics as metric (metric.stageNumber)}
+                            <div class="performance-stage">
+                                <div class="stage-header">
+                                    <span class="stage-badge"
+                                        >Stage {metric.stageNumber}</span
+                                    >
+                                    <span class="stage-name"
+                                        >{metric.stageName}</span
+                                    >
+                                </div>
+                                <div class="metrics-grid">
+                                    <div class="metric-card">
+                                        <div class="metric-label">
+                                            <span
+                                                class="material-icons metric-icon"
+                                                >schedule</span
+                                            >
+                                            <span>Duration</span>
+                                        </div>
+                                        <div class="metric-value">
+                                            {formatDuration(
+                                                metric.data.StartedAt,
+                                                metric.data.FinishedAt,
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-label">
+                                            <span
+                                                class="material-icons metric-icon"
+                                                >memory</span
+                                            >
+                                            <span>Max CPU Usage</span>
+                                        </div>
+                                        <div class="metric-value">
+                                            {metric.data.MaxCPUPercent
+                                                ? `${metric.data.MaxCPUPercent.toFixed(2)}%`
+                                                : "N/A"}
+                                        </div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-label">
+                                            <span
+                                                class="material-icons metric-icon"
+                                                >storage</span
+                                            >
+                                            <span>Max Memory Usage</span>
+                                        </div>
+                                        <div class="metric-value">
+                                            {formatBytes(
+                                                metric.data.MaxMemoryUsage,
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-label">
+                                            <span
+                                                class="material-icons metric-icon"
+                                                >computer</span
+                                            >
+                                            <span>CPUs Available</span>
+                                        </div>
+                                        <div class="metric-value">
+                                            {metric.data.NCPU || "N/A"}
+                                        </div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-label">
+                                            <span
+                                                class="material-icons metric-icon"
+                                                >dns</span
+                                            >
+                                            <span>Total Memory</span>
+                                        </div>
+                                        <div class="metric-value">
+                                            {formatBytes(metric.data.MemTotal)}
+                                        </div>
+                                    </div>
+                                    <div class="metric-card">
+                                        <div class="metric-label">
+                                            <span
+                                                class="material-icons metric-icon"
+                                                >info</span
+                                            >
+                                            <span>OS</span>
+                                        </div>
+                                        <div class="metric-value os-info">
+                                            {metric.data.OperatingSystem ||
+                                                "N/A"}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+                {:else if !isJobActive && isLoadingMetrics}
+                    <div class="loading-metrics">
+                        <div class="mini-spinner"></div>
+                        <span>Loading performance metrics...</span>
                     </div>
                 {/if}
             </div>
@@ -1449,6 +1653,97 @@
         color: var(--md-on-surface);
     }
 
+    .performance-section {
+        margin-top: var(--md-spacing-md);
+        display: flex;
+        flex-direction: column;
+        gap: var(--md-spacing-md);
+    }
+
+    .performance-stage {
+        border: 1px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-sm);
+        padding: var(--md-spacing-md);
+        background-color: var(--md-surface);
+    }
+
+    .stage-header {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-md);
+        flex-wrap: wrap;
+    }
+
+    .stage-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 12px;
+        background-color: var(--md-primary);
+        color: white;
+        border-radius: var(--md-radius-full);
+        font-size: var(--md-font-caption);
+        font-weight: 600;
+    }
+
+    .stage-name {
+        font-family: "Courier New", monospace;
+        font-size: var(--md-font-body2);
+        color: var(--md-on-surface-variant);
+        flex: 1;
+        word-break: break-word;
+    }
+
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: var(--md-spacing-sm);
+    }
+
+    .metric-card {
+        background-color: var(--md-surface-variant);
+        border: 1px solid var(--md-outline-variant);
+        border-radius: var(--md-radius-xs);
+        padding: var(--md-spacing-sm);
+        display: flex;
+        flex-direction: column;
+        gap: var(--md-spacing-xs);
+    }
+
+    .metric-label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--md-on-surface-variant);
+        font-size: var(--md-font-caption);
+        font-weight: 500;
+    }
+
+    .metric-icon {
+        font-size: 16px;
+    }
+
+    .metric-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--md-on-surface);
+        word-break: break-word;
+    }
+
+    .metric-value.os-info {
+        font-size: var(--md-font-body2);
+        font-weight: 500;
+    }
+
+    .loading-metrics {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-md);
+        color: var(--md-on-surface-variant);
+        font-size: var(--md-font-body2);
+    }
+
     .download-button {
         display: flex;
         align-items: center;
@@ -1565,6 +1860,15 @@
         .logs-error {
             flex-direction: column;
             text-align: center;
+        }
+
+        .metrics-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .stage-header {
+            flex-direction: column;
+            align-items: flex-start;
         }
     }
 </style>
