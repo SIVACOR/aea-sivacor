@@ -12,6 +12,7 @@
         getGirderToken,
         getGirderUrl,
         fetchPerformanceMetrics,
+        deleteSubmission,
     } from "./api";
     import JobRunner from "./JobRunner.svelte";
 
@@ -62,6 +63,9 @@
         data: any;
     }> = [];
     let isLoadingMetrics = false;
+
+    // Delete submission state
+    let isDeletingSubmission = false;
 
     $: showRunner = !isMonitoring && !currentJobId && !checkingLatestSubmission;
 
@@ -395,6 +399,7 @@
         logsConnectionError = null;
         performanceMetrics = [];
         isLoadingMetrics = false;
+        isDeletingSubmission = false;
 
         // Dispatch job reset for title management
         dispatch("jobreset", {
@@ -623,6 +628,33 @@
             return `${minutes}m ${seconds % 60}s`;
         } else {
             return `${seconds}s`;
+        }
+    }
+
+    async function handleDeleteAndReset() {
+        if (!latestSubmission || !latestSubmission._id) {
+            resetJob();
+            return;
+        }
+
+        if (
+            !confirm(
+                `Are you sure you want to delete submission "${latestSubmission.name}"? This action cannot be undone.`,
+            )
+        ) {
+            return;
+        }
+
+        isDeletingSubmission = true;
+        try {
+            await deleteSubmission(latestSubmission._id);
+            resetJob();
+        } catch (error) {
+            console.error("Failed to delete submission:", error);
+            alert(
+                `Failed to delete submission: ${error instanceof Error ? error.message : "Unknown error"}`,
+            );
+            isDeletingSubmission = false;
         }
     }
 </script>
@@ -858,10 +890,30 @@
                             </a>
                         {/if}
 
-                        <button on:click={resetJob} class="new-job-button">
-                            <span class="material-icons">add</span>
-                            Run New Job
-                        </button>
+                        <div class="action-buttons-row">
+                            <button
+                                on:click={resetJob}
+                                class="new-job-button"
+                                disabled={isDeletingSubmission}
+                            >
+                                <span class="material-icons">add</span>
+                                Run New Job
+                            </button>
+                            <button
+                                on:click={handleDeleteAndReset}
+                                class="delete-and-reset-button"
+                                disabled={isDeletingSubmission}
+                            >
+                                <span class="material-icons">
+                                    {isDeletingSubmission
+                                        ? "hourglass_empty"
+                                        : "delete"}
+                                </span>
+                                {isDeletingSubmission
+                                    ? "Deleting..."
+                                    : "Delete & Run New Job"}
+                            </button>
+                        </div>
                     </div>
                 {:else if jobDetails.status === 4}
                     <!-- ERROR -->
@@ -892,10 +944,30 @@
                             </div>
                         {/if}
 
-                        <button on:click={resetJob} class="new-job-button">
-                            <span class="material-icons">refresh</span>
-                            Try Again
-                        </button>
+                        <div class="action-buttons-row">
+                            <button
+                                on:click={resetJob}
+                                class="new-job-button"
+                                disabled={isDeletingSubmission}
+                            >
+                                <span class="material-icons">refresh</span>
+                                Try Again
+                            </button>
+                            <button
+                                on:click={handleDeleteAndReset}
+                                class="delete-and-reset-button"
+                                disabled={isDeletingSubmission}
+                            >
+                                <span class="material-icons">
+                                    {isDeletingSubmission
+                                        ? "hourglass_empty"
+                                        : "delete"}
+                                </span>
+                                {isDeletingSubmission
+                                    ? "Deleting..."
+                                    : "Delete & Try Again"}
+                            </button>
+                        </div>
                     </div>
                 {:else if jobDetails.status === 5}
                     <!-- CANCELED -->
@@ -910,10 +982,30 @@
                             </div>
                         </div>
 
-                        <button on:click={resetJob} class="new-job-button">
-                            <span class="material-icons">add</span>
-                            Run New Job
-                        </button>
+                        <div class="action-buttons-row">
+                            <button
+                                on:click={resetJob}
+                                class="new-job-button"
+                                disabled={isDeletingSubmission}
+                            >
+                                <span class="material-icons">add</span>
+                                Run New Job
+                            </button>
+                            <button
+                                on:click={handleDeleteAndReset}
+                                class="delete-and-reset-button"
+                                disabled={isDeletingSubmission}
+                            >
+                                <span class="material-icons">
+                                    {isDeletingSubmission
+                                        ? "hourglass_empty"
+                                        : "delete"}
+                                </span>
+                                {isDeletingSubmission
+                                    ? "Deleting..."
+                                    : "Delete & Run New Job"}
+                            </button>
+                        </div>
                     </div>
                 {/if}
 
@@ -1563,6 +1655,13 @@
         box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.1);
     }
 
+    .action-buttons-row {
+        display: flex;
+        gap: var(--md-spacing-sm);
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
     .new-job-button {
         display: flex;
         align-items: center;
@@ -1572,7 +1671,6 @@
         color: white;
         font-size: var(--md-font-body2);
         font-weight: 500;
-        align-self: flex-start;
         margin-top: 0;
     }
 
@@ -1580,6 +1678,43 @@
         outline: 3px solid var(--md-primary-dark);
         outline-offset: 2px;
         box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.3);
+    }
+
+    .new-job-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .delete-and-reset-button {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        background-color: var(--md-error);
+        color: white;
+        border: none;
+        border-radius: var(--md-border-radius);
+        font-size: var(--md-font-body2);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all var(--md-transition-standard);
+        margin-top: 0;
+    }
+
+    .delete-and-reset-button:hover:not(:disabled) {
+        background-color: #c62828;
+        box-shadow: var(--md-elevation-1);
+    }
+
+    .delete-and-reset-button:focus-visible {
+        outline: 3px solid var(--md-error-dark);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(244, 67, 54, 0.3);
+    }
+
+    .delete-and-reset-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
     }
 
     .error-log {
