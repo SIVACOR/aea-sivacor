@@ -140,6 +140,20 @@ export async function getSubmissionByIdOrName(idOrName: string): Promise<Folder 
 }
 
 /**
+ * Deletes a submission folder by ID.
+ * @param {string} submissionId - The submission folder ID to delete.
+ * @returns {Promise<void>}
+ */
+export async function deleteSubmission(submissionId: string): Promise<void> {
+    if (!submissionId) {
+        throw new Error('Submission ID must be provided.');
+    }
+    await api(`/sivacor/submission/${submissionId}`, {
+        method: 'DELETE'
+    });
+}
+
+/**
  * Sets the authentication token in the preferred storage (e.g., as a cookie).
  * @param {string} token - The 'Girder-Token' value.
  */
