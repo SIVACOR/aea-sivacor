@@ -1692,12 +1692,8 @@
         padding: var(--md-spacing-sm) var(--md-spacing-md);
         background-color: var(--md-error);
         color: white;
-        border: none;
-        border-radius: var(--md-border-radius);
         font-size: var(--md-font-body2);
         font-weight: 500;
-        cursor: pointer;
-        transition: all var(--md-transition-standard);
         margin-top: 0;
     }
 
