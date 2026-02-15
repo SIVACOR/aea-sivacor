@@ -159,7 +159,12 @@
             }
         } catch (error) {
             console.error("Failed to load available images:", error);
-            jobErrorMessage = "Failed to load available images.";
+            // Extract detailed error message if available
+            if (error instanceof Error) {
+                jobErrorMessage = error.message;
+            } else {
+                jobErrorMessage = "Failed to load available images.";
+            }
         } finally {
             imagesLoading = false;
             isInitializing = false; // Allow saving after initialization is complete
@@ -284,8 +289,13 @@
             });
         } catch (error) {
             console.error("Job submission failed:", error);
-            jobErrorMessage =
-                "Failed to submit job. Check console for details.";
+            // Extract detailed error message if available
+            if (error instanceof Error) {
+                jobErrorMessage = error.message;
+            } else {
+                jobErrorMessage =
+                    "Failed to submit job. Check console for details.";
+            }
             jobStatusMessage = "Job submission failed.";
         } finally {
             isJobRunning = false;

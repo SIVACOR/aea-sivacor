@@ -139,7 +139,12 @@
             });
         } catch (error) {
             console.error("File upload failed:", error);
-            errorMessage = "Upload failed. Check console for details.";
+            // Extract detailed error message if available
+            if (error instanceof Error) {
+                errorMessage = error.message;
+            } else {
+                errorMessage = "Upload failed. Check console for details.";
+            }
             uploadStatus = "Failed";
             uploadProgress = 0; // Reset progress on failure
         } finally {

@@ -218,7 +218,31 @@ export async function api(endpoint: string, options: RequestInit = {}): Promise<
     });
 
     if (res.status === 204) return null; // Handle No Content
+
+    // Check for errors and try to extract detailed error information
     if (!res.ok && res.status !== 401) { // 401 is handled by checkAuth()
+
+        // Try to parse error details from response body
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            try {
+                const errorData = await res.json();
+                // If the error response contains a message field, use it
+                if (errorData && errorData.message) {
+                    const error = new Error(errorData.message) as any;
+                    error.statusCode = res.status;
+                    error.details = errorData;
+                    throw error;
+                }
+            } catch (parseError) {
+                // If parsing fails, fall through to generic error
+                if (parseError instanceof Error && parseError.message && !parseError.message.includes('Unexpected')) {
+                    throw parseError;
+                }
+            }
+        }
+
+        // Fallback to generic error message
         throw new Error(`API call failed: ${res.statusText}`);
     }
 
