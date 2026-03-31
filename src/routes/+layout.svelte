@@ -5,12 +5,24 @@
     import { checkAuthentication, setAuthToken } from "../lib/api";
     import { authLoading, user } from "../lib/stores";
     import Banner from "../lib/Banner.svelte";
+    import CookieNotice from "../lib/CookieNotice.svelte";
     import "../app.css";
     import { browser } from "$app/environment";
 
     let showBanner = false;
     if (browser && showBanner) {
         showBanner = sessionStorage.getItem("bannerDismissed") !== "true";
+    }
+
+    let showCookieNotice = false;
+    if (browser) {
+        showCookieNotice =
+            sessionStorage.getItem("cookieNoticeDismissed") !== "true";
+    }
+
+    function dismissCookieNotice() {
+        showCookieNotice = false;
+        sessionStorage.setItem("cookieNoticeDismissed", "true");
     }
 
     const maintenanceMessage =
@@ -116,6 +128,9 @@
             <a href="/privacy">Privacy Policy</a>
         </footer>
     </div>
+    {#if showCookieNotice}
+        <CookieNotice on:dismiss={dismissCookieNotice} />
+    {/if}
 {/if}
 
 <style>
