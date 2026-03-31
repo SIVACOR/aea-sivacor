@@ -263,7 +263,7 @@
 
 <style>
     .app-container {
-        min-height: 100vh;
+        flex: 1;
         max-width: 1200px;
         margin: 0 auto;
         padding: var(--md-spacing-md);
