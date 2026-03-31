@@ -107,10 +107,15 @@
         </div>
     </div>
 {:else}
-    {#if showBanner}
-        <Banner message={maintenanceMessage} on:dismiss={dismissBanner} />
-    {/if}
-    <slot />
+    <div class="page-wrapper">
+        {#if showBanner}
+            <Banner message={maintenanceMessage} on:dismiss={dismissBanner} />
+        {/if}
+        <slot />
+        <footer class="app-footer">
+            <a href="/privacy">Privacy Policy</a>
+        </footer>
+    </div>
 {/if}
 
 <style>
@@ -196,6 +201,30 @@
         50% {
             opacity: 1;
         }
+    }
+
+    .page-wrapper {
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
+    }
+
+    .app-footer {
+        text-align: center;
+        padding: var(--md-spacing-md) var(--md-spacing-lg);
+        border-top: 1px solid var(--md-outline);
+        background: var(--md-surface);
+        font-size: 0.8rem;
+    }
+
+    .app-footer a {
+        color: var(--md-on-surface-variant);
+        text-decoration: none;
+    }
+
+    .app-footer a:hover {
+        color: var(--md-primary);
+        text-decoration: underline;
     }
 
     @media (max-width: 768px) {
