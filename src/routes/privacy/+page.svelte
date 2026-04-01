@@ -65,12 +65,12 @@
                     <tr>
                         <td>Uploaded research archive files</td>
                         <td>Uploaded by you when submitting a job</td>
-                        <td>Girder backend (temporary)</td>
+                        <td>Girder backend (retained for 30d)</td>
                     </tr>
                     <tr>
                         <td>Job results and output artefacts</td>
                         <td>Produced by the SIVACOR pipeline</td>
-                        <td>Girder backend (temporary)</td>
+                        <td>Girder backend (retained for 30d)</td>
                     </tr>
                     <tr>
                         <td
