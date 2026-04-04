@@ -182,27 +182,29 @@
         </div>
     {/if}
 
-    <div class="upload-area" class:disabled={isUploading}>
-        <label for="file-input" class="file-input-label">
-            <span class="material-icons file-icon">attach_file</span>
-            <div class="file-input-text">
-                <strong>Choose an archive file</strong> or drag it here
-                <small
-                    >Supported formats: ZIP, TAR (.zip, .tar.gz, .tgz, etc.) •
-                    Max size: 5GB</small
-                >
-            </div>
-        </label>
-        <input
-            type="file"
-            bind:this={fileInput}
-            on:change={handleFileSelect}
-            disabled={isUploading}
-            id="file-input"
-            class="file-input"
-            accept=".zip,.tar,.tar.gz,.tgz,.tar.bz2,.tbz2,.tar.xz,.txz,application/zip,application/x-tar,application/gzip,application/x-gzip"
-        />
-    </div>
+    {#if !(uploadProgress === 100 && !isUploading)}
+        <div class="upload-area" class:disabled={isUploading}>
+            <label for="file-input" class="file-input-label">
+                <span class="material-icons file-icon">attach_file</span>
+                <div class="file-input-text">
+                    <strong>Choose an archive file</strong> or drag it here
+                    <small
+                        >Supported formats: ZIP, TAR (.zip, .tar.gz, .tgz, etc.)
+                        • Max size: 5GB</small
+                    >
+                </div>
+            </label>
+            <input
+                type="file"
+                bind:this={fileInput}
+                on:change={handleFileSelect}
+                disabled={isUploading}
+                id="file-input"
+                class="file-input"
+                accept=".zip,.tar,.tar.gz,.tgz,.tar.bz2,.tbz2,.tar.xz,.txz,application/zip,application/x-tar,application/gzip,application/x-gzip"
+            />
+        </div>
+    {/if}
 
     {#if selectedFile && !isUploading}
         <div class="file-preview">
@@ -249,8 +251,8 @@
                 </div>
             </div>
             <button on:click={resetUpload} class="md-button-text">
-                <span class="material-icons">add</span>
-                Upload Another
+                <span class="material-icons">change_circle</span>
+                Replace Uploaded File
             </button>
         </div>
     {/if}
