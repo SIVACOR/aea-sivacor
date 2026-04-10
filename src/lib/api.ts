@@ -40,12 +40,14 @@ interface JobStageConfig {
     selectedImage: string;
     selectedTag: string;
     executionFileName: string;
+    networkIsolation: boolean;
 }
 
 interface ApiJobStageConfig {
     image_name: string;
     image_tag: string;
     main_file: string;
+    network_isolation: boolean;
 }
 
 // API Base URL from environment variable with fallback for development
@@ -455,7 +457,8 @@ export async function submitJob(fileId: string, config: JobStageConfig[]): Promi
     const transformedConfig: ApiJobStageConfig[] = config.map((stage: JobStageConfig) => ({
         image_name: stage.selectedImage,
         image_tag: stage.selectedTag,
-        main_file: stage.executionFileName
+        main_file: stage.executionFileName,
+        network_isolation: stage.networkIsolation
     }));
 
     // Query arguments for the job API

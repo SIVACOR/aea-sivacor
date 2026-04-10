@@ -32,18 +32,20 @@
     let isInitializing = true;
 
     // Configuration entries array - each entry represents a config row
-    /** @type {Array<{id: string, selectedImage: string | null, selectedTag: string | null, executionFileName: string}>} */
+    /** @type {Array<{id: string, selectedImage: string | null, selectedTag: string | null, executionFileName: string, networkIsolation: boolean}>} */
     let configEntries: Array<{
         id: string;
         selectedImage: string | null;
         selectedTag: string | null;
         executionFileName: string;
+        networkIsolation: boolean;
     }> = [
         {
             id: crypto.randomUUID(),
             selectedImage: null,
             selectedTag: null,
             executionFileName: "main.do",
+            networkIsolation: false,
         },
     ];
 
@@ -64,6 +66,7 @@
                 selectedImage: entry.selectedImage,
                 selectedTag: entry.selectedTag,
                 executionFileName: entry.executionFileName,
+                networkIsolation: entry.networkIsolation,
             }));
             localStorage.setItem(
                 STORAGE_KEYS.configEntries,
@@ -99,6 +102,7 @@
                         selectedTag: config.selectedTag || null,
                         executionFileName:
                             config.executionFileName || "main.do",
+                        networkIsolation: config.networkIsolation ?? false,
                     }));
                     console.log("Restored config entries:", configEntries);
                 }
@@ -138,6 +142,7 @@
                             selectedImage: availableImages[0],
                             selectedTag: null,
                             executionFileName: "main.do",
+                            networkIsolation: false,
                         },
                     ];
                 }
@@ -193,6 +198,7 @@
                 selectedImage: null,
                 selectedTag: null,
                 executionFileName: "main.do",
+                networkIsolation: false,
             },
         ];
         // Saving will be triggered by the reactive statement
@@ -271,6 +277,7 @@
                 selectedImage: string;
                 selectedTag: string;
                 executionFileName: string;
+                networkIsolation: boolean;
             }>;
 
             if (validConfig.length === 0) {
@@ -407,6 +414,25 @@
                             <div class="input-hint">
                                 💡 Common: <code>main.do</code> (Stata),
                                 <code>main.R</code> (R)
+                            </div>
+                        </div>
+
+                        <!-- Internet Isolation Toggle -->
+                        <div class="input-group toggle-group">
+                            <label for="isolation-toggle-{entry.id}">
+                                Net Isolation
+                            </label>
+                            <label class="toggle-switch">
+                                <input
+                                    type="checkbox"
+                                    id="isolation-toggle-{entry.id}"
+                                    bind:checked={entry.networkIsolation}
+                                    disabled={isJobRunning}
+                                />
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="input-hint">
+                                Block network access<br />during execution
                             </div>
                         </div>
                     </div>
@@ -588,7 +614,7 @@
 
     .config-widgets {
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-columns: 1fr 1fr 1fr 100px;
         gap: var(--md-spacing-sm);
         flex: 1;
         align-items: start;
@@ -710,6 +736,72 @@
         font-family: "Courier New", monospace;
         font-size: 0.875em;
         color: var(--md-on-surface);
+    }
+
+    .toggle-group {
+        width: 100px;
+        justify-content: flex-start;
+    }
+
+    .toggle-group .input-hint {
+        margin: 0;
+    }
+
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 24px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--md-outline-variant);
+        border-radius: 24px;
+        transition: background-color var(--md-transition-standard);
+    }
+
+    .toggle-slider::before {
+        content: "";
+        position: absolute;
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        border-radius: 50%;
+        transition: transform var(--md-transition-standard);
+    }
+
+    .toggle-switch input:checked + .toggle-slider {
+        background-color: var(--md-primary);
+    }
+
+    .toggle-switch input:checked + .toggle-slider::before {
+        transform: translateX(20px);
+    }
+
+    .toggle-switch input:disabled + .toggle-slider {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .toggle-switch:focus-within .toggle-slider {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
     }
 
     .run-button {
