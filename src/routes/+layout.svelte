@@ -9,7 +9,7 @@
     import "../app.css";
     import { browser } from "$app/environment";
 
-    let showBanner = false;
+    let showBanner = true;
     if (browser && showBanner) {
         showBanner = sessionStorage.getItem("bannerDismissed") !== "true";
     }
@@ -26,7 +26,7 @@
     }
 
     const maintenanceMessage =
-        "SIVACOR will be down for scheduled maintenance on January 1, 2026, from 07:00 to 19:00 EST.";
+        "STATA images are temporarily unavailable. We apologize for the inconvenience. Please check back later or contact support for assistance.";
 
     function dismissBanner() {
         showBanner = false;
