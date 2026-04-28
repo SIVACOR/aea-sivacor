@@ -9,7 +9,7 @@
     import "../app.css";
     import { browser } from "$app/environment";
 
-    let showBanner = true;
+    let showBanner = false;
     if (browser && showBanner) {
         showBanner = sessionStorage.getItem("bannerDismissed") !== "true";
     }
