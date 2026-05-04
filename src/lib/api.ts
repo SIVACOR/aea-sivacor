@@ -448,7 +448,7 @@ export async function downloadFile(fileId: string, filename: string | null = nul
  * @param {JobStageConfig[]} config - The configuration for the job stages.
  * @returns {Promise<any>} The response object from the job creation endpoint.
  */
-export async function submitJob(fileId: string, config: JobStageConfig[]): Promise<any> {
+export async function submitJob(fileId: string, config: JobStageConfig[], jobSecrets: Record<string, string> = {}): Promise<any> {
     const endpoint = `/sivacor/submit_job`;
 
     // translate config object to match expected API format
@@ -458,17 +458,16 @@ export async function submitJob(fileId: string, config: JobStageConfig[]): Promi
         image_name: stage.selectedImage,
         image_tag: stage.selectedTag,
         main_file: stage.executionFileName,
-        network_isolation: stage.networkIsolation
+        network_isolation: stage.networkIsolation,
     }));
 
-    // Query arguments for the job API
-    const queryArgs = new URLSearchParams({
-        id: fileId,
-        stages: JSON.stringify(transformedConfig)
-    });
+    // Convert map to list of {"name": "...", "value": "..."} objects
+    const secretsList = Object.entries(jobSecrets).map(([key, value]) => ({ key, value }));
 
-    const response = await api(`${endpoint}?${queryArgs.toString()}`, {
+    // Send file ID as query param (non-sensitive) but stages+secrets in POST body
+    const response = await api(`${endpoint}?id=${encodeURIComponent(fileId)}`, {
         method: 'POST',
+        body: JSON.stringify({ stages: transformedConfig, env_secrets: secretsList }),
     });
 
     return response;

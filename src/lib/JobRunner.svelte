@@ -49,6 +49,9 @@
         },
     ];
 
+    // Job-level secrets — in-memory only, never persisted to localStorage
+    let jobSecrets: Record<string, string> = {};
+
     const dispatch = createEventDispatcher();
 
     // Storage keys for persisting user preferences
@@ -62,6 +65,7 @@
     function saveUserSelections() {
         try {
             // Save the entire config entries array
+            // jobSecrets are intentionally omitted — never persist secrets to localStorage
             const configToSave = configEntries.map((entry) => ({
                 selectedImage: entry.selectedImage,
                 selectedTag: entry.selectedTag,
@@ -239,6 +243,31 @@
         }
     }
 
+    /**
+     * Job-level secret helpers.
+     * Secrets are kept only in component memory — never persisted to localStorage.
+     */
+    function addSecret() {
+        jobSecrets = { ...jobSecrets, "": "" };
+    }
+
+    function updateSecretKey(oldKey: string, newKey: string) {
+        const updated: Record<string, string> = {};
+        for (const [k, v] of Object.entries(jobSecrets)) {
+            updated[k === oldKey ? newKey : k] = v;
+        }
+        jobSecrets = updated;
+    }
+
+    function updateSecretValue(key: string, value: string) {
+        jobSecrets = { ...jobSecrets, [key]: value };
+    }
+
+    function removeSecret(key: string) {
+        const { [key]: _, ...rest } = jobSecrets;
+        jobSecrets = rest;
+    }
+
     async function runJob() {
         if (!uploadedFileId) {
             jobErrorMessage = "Please upload a file first.";
@@ -284,7 +313,11 @@
                 throw new Error("No valid configuration entries to submit");
             }
 
-            const response = await submitJob(uploadedFileId, validConfig);
+            const response = await submitJob(
+                uploadedFileId,
+                validConfig,
+                jobSecrets,
+            );
             jobId = response._id || "N/A";
             jobStatusMessage = `Job successfully started! Job ID: ${jobId}`;
             dispatch("jobsubmitted", {
@@ -462,6 +495,65 @@
                 <span class="material-icons">add</span>
                 Add Step
             </button>
+
+            <!-- Job-level Environment Secrets (in-memory only, never persisted) -->
+            <div class="secrets-section">
+                <div class="secrets-header">
+                    <span class="material-icons secrets-icon">lock</span>
+                    <span class="secrets-label">Environment Secrets</span>
+                    <span class="secrets-hint">Passed to all stages </span>
+                    <button
+                        type="button"
+                        class="add-secret-btn"
+                        on:click={addSecret}
+                        disabled={isJobRunning}
+                        title="Add secret environment variable"
+                    >
+                        <span class="material-icons">add</span>
+                    </button>
+                </div>
+                {#each Object.entries(jobSecrets) as [key, value]}
+                    <div class="secret-row">
+                        <input
+                            type="text"
+                            class="secret-key-input"
+                            placeholder="VAR_NAME"
+                            value={key}
+                            on:change={(e) =>
+                                updateSecretKey(
+                                    key,
+                                    (e.target as HTMLInputElement).value,
+                                )}
+                            disabled={isJobRunning}
+                            autocomplete="off"
+                            spellcheck={false}
+                        />
+                        <span class="secret-separator"></span>
+                        <input
+                            type="password"
+                            class="secret-value-input"
+                            placeholder="secret value"
+                            {value}
+                            on:input={(e) =>
+                                updateSecretValue(
+                                    key,
+                                    (e.target as HTMLInputElement).value,
+                                )}
+                            disabled={isJobRunning}
+                            autocomplete="new-password"
+                        />
+                        <button
+                            type="button"
+                            class="remove-secret-btn"
+                            on:click={() => removeSecret(key)}
+                            disabled={isJobRunning}
+                            title="Remove secret"
+                        >
+                            <span class="material-icons">close</span>
+                        </button>
+                    </div>
+                {/each}
+            </div>
 
             <button
                 on:click={runJob}
@@ -1100,5 +1192,109 @@
             align-self: center;
             margin-top: var(--md-spacing-sm);
         }
+    }
+
+    /* Secrets section */
+    .secrets-section {
+        margin-top: var(--md-spacing-md);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        border: 1px solid var(--md-outline-variant, #cac4d0);
+        border-radius: var(--md-shape-corner-small, 4px);
+        background: var(--md-surface-variant, #f3edf7);
+    }
+
+    .secrets-header {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-sm);
+    }
+
+    .secrets-icon {
+        font-size: 1rem;
+        color: var(--md-primary, #6750a4);
+    }
+
+    .secrets-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--md-on-surface, #1c1b1f);
+    }
+
+    .secrets-hint {
+        font-size: 0.75rem;
+        color: var(--md-on-surface-variant, #49454f);
+        flex: 1;
+    }
+
+    .add-secret-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: 1px solid var(--md-outline-variant, #cac4d0);
+        border-radius: 50%;
+        width: 34px;
+        min-width: 34px;
+        cursor: pointer;
+        color: var(--md-primary, #6750a4);
+        padding: 0;
+    }
+
+    .add-secret-btn .material-icons {
+        font-size: 1rem;
+    }
+
+    .add-secret-btn:hover:not(:disabled) {
+        background: var(--md-primary-container, #eaddff);
+    }
+
+    .secret-row {
+        display: flex;
+        gap: var(--md-spacing-xs, 4px);
+        margin-bottom: var(--md-spacing-xs, 4px);
+    }
+
+    .secret-key-input {
+        padding: var(--md-spacing-sm);
+        width: 35%;
+        font-family: monospace;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+
+    .secret-separator {
+        font-weight: bold;
+        color: var(--md-on-surface-variant, #49454f);
+    }
+
+    .secret-value-input {
+        padding: var(--md-spacing-sm);
+        flex: 1;
+        font-family: monospace;
+        font-size: 0.8rem;
+    }
+
+    .remove-secret-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        border-radius: 50%;
+        width: 34px;
+        height: 20px;
+        min-width: 34px;
+        cursor: pointer;
+        color: var(--md-error, #b3261e);
+        padding: 0;
+    }
+
+    .remove-secret-btn .material-icons {
+        font-size: 1rem;
+    }
+
+    .remove-secret-btn:hover:not(:disabled) {
+        background: var(--md-error-container, #f9dedc);
     }
 </style>
