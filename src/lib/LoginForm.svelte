@@ -1,6 +1,8 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { page } from "$app/stores";
+    import { goto } from "$app/navigation";
+    import { browser } from "$app/environment";
     import { fetchOAuthProviders } from "./api";
     import { createEventDispatcher } from "svelte";
 
@@ -17,8 +19,33 @@
     let providers: any[] | null = null;
     let loading = true;
     let error: string | null = null;
+    let oauthErrorMessage: string | null = null;
+
+    function getOAuthErrorMessage(errorParam: string | null): string | null {
+        switch (errorParam) {
+            case "accountApproval":
+                return "Authentication completed, but your account is pending administrator approval. You will be able to sign in once approved.";
+            default:
+                return errorParam
+                    ? "Authentication did not complete successfully. Please try again or contact support if the problem continues."
+                    : null;
+        }
+    }
 
     onMount(async () => {
+        const url = new URL($page.url);
+        const errorFromUrl = url.searchParams.get("error");
+
+        oauthErrorMessage = getOAuthErrorMessage(errorFromUrl);
+
+        if (errorFromUrl && browser) {
+            url.searchParams.delete("error");
+            const newUrl = url.pathname + url.search;
+
+            // eslint-disable-next-line svelte/no-navigation-without-resolve
+            await goto(newUrl || "/", { replaceState: true });
+        }
+
         // Dispatch title update for login state
         dispatch("titleupdate", { title: "SIVACOR - Sign In" });
 
@@ -120,6 +147,16 @@
                     <span class="material-icons login-icon">login</span>
                     <h2>Sign In</h2>
                 </div>
+                {#if oauthErrorMessage}
+                    <div
+                        class="oauth-error-banner"
+                        role="status"
+                        aria-live="polite"
+                    >
+                        <span class="material-icons">info</span>
+                        <p>{oauthErrorMessage}</p>
+                    </div>
+                {/if}
                 <p class="login-subtitle">
                     Choose your authentication provider to continue
                 </p>
@@ -340,6 +377,31 @@
         font-size: var(--md-font-caption);
         margin: 0;
         text-align: center;
+    }
+
+    .oauth-error-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--md-spacing-xs);
+        margin: var(--md-spacing-sm) 0 var(--md-spacing-md);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        border-radius: var(--md-radius-md);
+        background-color: rgba(255, 193, 7, 0.12);
+        border: 1px solid rgba(255, 193, 7, 0.35);
+        color: var(--md-on-surface);
+        text-align: left;
+    }
+
+    .oauth-error-banner .material-icons {
+        color: var(--md-warning);
+        font-size: 1.1rem;
+        margin-top: 2px;
+    }
+
+    .oauth-error-banner p {
+        margin: 0;
+        font-size: var(--md-font-caption);
+        line-height: 1.4;
     }
 
     .providers-list {
