@@ -32,6 +32,7 @@
     let selectedFile: File | null = null;
     let uploadProgress = 0;
     let isUploading = false;
+    let isDragging = false;
     let uploadStatus = "";
     let errorMessage: string | null = null;
 
@@ -79,6 +80,37 @@
 
         selectedFile = file;
         uploadProgress = 0;
+    }
+
+    function handleDragOver(event: DragEvent) {
+        event.preventDefault();
+        isDragging = true;
+    }
+
+    function handleDragLeave() {
+        isDragging = false;
+    }
+
+    function handleDrop(event: DragEvent) {
+        event.preventDefault();
+        isDragging = false;
+
+        if (isUploading) return; // Prevent drops during active uploads
+
+        if (event.dataTransfer && event.dataTransfer.files.length > 0) {
+            const file = event.dataTransfer.files[0];
+
+            // Reuse your existing validation logic!
+            if (!validateFileType(file)) {
+                errorMessage = `Invalid file type. Please select a ZIP or TAR archive (.zip, .tar, .tar.gz, .tgz, .tar.bz2, .tbz2, .tar.xz, .txz)`;
+                selectedFile = null;
+                if (fileInput) fileInput.value = "";
+                return;
+            }
+
+            selectedFile = file;
+            uploadProgress = 0;
+        }
     }
 
     function formatFileSize(bytes: number): string {
@@ -183,7 +215,15 @@
     {/if}
 
     {#if !(uploadProgress === 100 && !isUploading)}
-        <div class="upload-area" class:disabled={isUploading}>
+        <div
+          class="upload-area"
+          class:disabled={isUploading}
+          class:is-dragging={isDragging}
+          on:dragover={handleDragOver}
+          on:dragenter={handleDragOver}
+          on:dragleave={handleDragLeave}
+          on:drop={handleDrop}
+        >
             <label for="file-input" class="file-input-label">
                 <span class="material-icons file-icon">attach_file</span>
                 <div class="file-input-text">
@@ -348,6 +388,13 @@
         outline-offset: 2px;
         border-color: var(--md-primary);
         box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.2);
+    }
+
+    .upload-area.is-dragging .file-input-label {
+        border-color: var(--md-primary);
+        background-color: rgba(25, 118, 210, 0.1);
+        transform: scale(1.02); /* Slight pop effect */
+        transition: all var(--md-transition-standard);
     }
 
     .file-icon {
