@@ -155,6 +155,15 @@ export async function deleteSubmission(submissionId: string): Promise<void> {
     });
 }
 
+export async function deleteItem(itemId: string): Promise<void> {
+    if (!itemId) {
+        throw new Error("Item ID must be provided");
+    }
+    await api(`/item/${itemId}`, {
+        method: 'DELETE'
+    });
+}
+
 /**
  * Sets the authentication token in the preferred storage (e.g., as a cookie).
  * @param {string} token - The 'Girder-Token' value.

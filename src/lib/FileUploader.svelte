@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import { initiateFileUpload, uploadFileChunk } from "./api";
+    import { deleteItem, initiateFileUpload, uploadFileChunk } from "./api";
 
     const UPLOAD_CHUNK_SIZE = 1024 * 1024 * 5;
 
@@ -35,6 +35,8 @@
     let isDragging = false;
     let uploadStatus = "";
     let errorMessage: string | null = null;
+    let uploadedItemId: string | null = null;
+    let isDeletingUpload = false;
 
     const dispatch = createEventDispatcher();
 
@@ -166,6 +168,7 @@
             uploadProgress = 100;
             uploadStatus = "Upload complete!";
             console.log("File upload completed successfully:", lastChunk);
+            uploadedItemId = lastChunk.itemId;
             dispatch("uploadcomplete", {
                 fileId: lastChunk._id, // This is the ID the JobRunner needs
             });
@@ -187,12 +190,29 @@
         }
     }
 
+    async function handleDelete() {
+        if (!uploadedItemId) {
+            resetUpload();
+            return;
+        }
+        isDeletingUpload = true;
+        try {
+            await deleteItem(uploadedItemId);
+        } catch (error) {
+            console.error("Failed to delete item:", error);
+            isDeletingUpload = false;
+        }
+        resetUpload();
+    }
+
     function resetUpload() {
         uploadProgress = 0;
         uploadStatus = "";
         errorMessage = null;
         selectedFile = null;
         if (fileInput) fileInput.value = "";
+        uploadedItemId = null;
+        isDeletingUpload = false;
     }
 </script>
 
@@ -290,15 +310,47 @@
                     </div>
                 </div>
             </div>
-            <button on:click={resetUpload} class="md-button-text">
-                <span class="material-icons">change_circle</span>
-                Replace Uploaded File
+            <button
+                on:click={handleDelete}
+                disabled={isDeletingUpload}
+                class="delete-and-reset-button"
+            >
+                <span class="material-icons">delete</span>
+                Delete Uploaded File
             </button>
         </div>
     {/if}
 </div>
 
 <style>
+    .delete-and-reset-button {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        background-color: var(--md-error);
+        color: white;
+        font-size: var(--md-font-body2);
+        font-weight: 500;
+        margin-top: 0;
+    }
+
+    .delete-and-reset-button:hover:not(:disabled) {
+        background-color: #c62828;
+        box-shadow: var(--md-elevation-1);
+    }
+
+    .delete-and-reset-button:focus-visible {
+        outline: 3px solid var(--md-error-dark);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(244, 67, 54, 0.3);
+    }
+
+    .delete-and-reset-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
     .upload-widget {
         margin-bottom: var(--md-spacing-lg);
     }
