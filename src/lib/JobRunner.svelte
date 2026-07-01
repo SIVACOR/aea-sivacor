@@ -452,7 +452,7 @@
 
                         <!-- Internet Isolation Toggle -->
                         <div class="input-group toggle-group">
-                            <label for="isolation-toggle-{entry.id}">
+                            <label for="isolation-toggle-{index}">
                                 Net Isolation
                             </label>
                             <label class="toggle-switch">
@@ -461,10 +461,12 @@
                                     id="isolation-toggle-{entry.id}"
                                     bind:checked={entry.networkIsolation}
                                     disabled={isJobRunning}
+                                    aria-describedby="isolation-hint-{index}"
                                 />
-                                <span class="toggle-slider"></span>
+                                <span class="toggle-slider" aria-hidden="true"
+                                ></span>
                             </label>
-                            <div class="input-hint">
+                            <div class="input-hint" id="isolation-hint-{index}">
                                 Block network access<br />during execution
                             </div>
                         </div>
@@ -497,24 +499,41 @@
             </button>
 
             <!-- Job-level Environment Secrets (in-memory only, never persisted) -->
-            <div class="secrets-section">
+            <div
+                class="secrets-section"
+                role="group"
+                aria-labelledby="secrets-section-title"
+            >
                 <div class="secrets-header">
-                    <span class="material-icons secrets-icon">lock</span>
-                    <span class="secrets-label">Environment Secrets</span>
-                    <span class="secrets-hint">Passed to all stages </span>
+                    <span class="material-icons secrets-icon" aria-hidden="true"
+                        >lock</span
+                    >
+                    <span class="secrets-label" id="secrets-section-title"
+                        >Environment Secrets</span
+                    >
+                    <span class="secrets-hint" id="secrets-section-hint"
+                        >Passed to all stages</span
+                    >
                     <button
                         type="button"
                         class="add-secret-btn"
                         on:click={addSecret}
                         disabled={isJobRunning}
+                        aria-label="Add environment variable"
                         title="Add secret environment variable"
                     >
-                        <span class="material-icons">add</span>
+                        <span class="material-icons" aria-hidden="true"
+                            >add</span
+                        >
                     </button>
                 </div>
                 {#each Object.entries(jobSecrets) as [key, value]}
                     <div class="secret-row">
+                        <label for="secret-key-{key}" class="sr-only">
+                            Environment variable name
+                        </label>
                         <input
+                            id="secret-key-{key}"
                             type="text"
                             class="secret-key-input"
                             placeholder="VAR_NAME"
@@ -527,9 +546,16 @@
                             disabled={isJobRunning}
                             autocomplete="off"
                             spellcheck={false}
+                            aria-label="Environment variable name"
                         />
-                        <span class="secret-separator"></span>
+                        <span class="secret-separator" aria-hidden="true"
+                            >=</span
+                        >
+                        <label for="secret-value-{key}" class="sr-only">
+                            Environment variable value
+                        </label>
                         <input
+                            id="secret-value-{key}"
                             type="password"
                             class="secret-value-input"
                             placeholder="secret value"
@@ -541,15 +567,19 @@
                                 )}
                             disabled={isJobRunning}
                             autocomplete="new-password"
+                            aria-label="Environment variable value"
                         />
                         <button
                             type="button"
                             class="remove-secret-btn"
                             on:click={() => removeSecret(key)}
                             disabled={isJobRunning}
+                            aria-label="Remove environment variable {key}"
                             title="Remove secret"
                         >
-                            <span class="material-icons">close</span>
+                            <span class="material-icons" aria-hidden="true"
+                                >close</span
+                            >
                         </button>
                     </div>
                 {/each}
@@ -1212,7 +1242,7 @@
 
     .secrets-icon {
         font-size: 1rem;
-        color: var(--md-primary, #6750a4);
+        color: var(--md-primary-dark, #1565c0);
     }
 
     .secrets-label {
@@ -1237,7 +1267,7 @@
         width: 34px;
         min-width: 34px;
         cursor: pointer;
-        color: var(--md-primary, #6750a4);
+        color: var(--md-primary-dark, #1565c0);
         padding: 0;
     }
 
@@ -1296,5 +1326,18 @@
 
     .remove-secret-btn:hover:not(:disabled) {
         background: var(--md-error-container, #f9dedc);
+    }
+
+    /* Visually hidden but accessible to screen readers */
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
 </style>

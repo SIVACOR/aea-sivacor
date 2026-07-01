@@ -236,19 +236,24 @@
 
     {#if !(uploadProgress === 100 && !isUploading)}
         <div
-          class="upload-area"
-          class:disabled={isUploading}
-          class:is-dragging={isDragging}
-          on:dragover={handleDragOver}
-          on:dragenter={handleDragOver}
-          on:dragleave={handleDragLeave}
-          on:drop={handleDrop}
+            class="upload-area"
+            class:disabled={isUploading}
+            class:is-dragging={isDragging}
+            on:dragover={handleDragOver}
+            on:dragenter={handleDragOver}
+            on:dragleave={handleDragLeave}
+            on:drop={handleDrop}
+            role="region"
+            aria-label="File upload drop zone"
+            aria-describedby="upload-instructions"
         >
             <label for="file-input" class="file-input-label">
-                <span class="material-icons file-icon">attach_file</span>
+                <span class="material-icons file-icon" aria-hidden="true"
+                    >attach_file</span
+                >
                 <div class="file-input-text">
                     <strong>Choose an archive file</strong> or drag it here
-                    <small
+                    <small id="upload-instructions"
                         >Supported formats: ZIP, TAR (.zip, .tar.gz, .tgz, etc.)
                         • Max size: 5GB</small
                     >
@@ -261,8 +266,13 @@
                 disabled={isUploading}
                 id="file-input"
                 class="file-input"
+                aria-label="Choose an archive file to upload"
                 accept=".zip,.tar,.tar.gz,.tgz,.tar.bz2,.tbz2,.tar.xz,.txz,application/zip,application/x-tar,application/gzip,application/x-gzip"
             />
+        </div>
+        <!-- Live region to announce drag state changes to assistive technologies -->
+        <div class="sr-only" aria-live="polite" aria-atomic="true">
+            {isDragging ? "File detected. Release to upload." : ""}
         </div>
     {/if}
 
@@ -592,5 +602,18 @@
         .upload-button {
             width: 100%;
         }
+    }
+
+    /* Visually hidden but accessible to screen readers */
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
 </style>
