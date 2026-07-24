@@ -2,17 +2,23 @@
     import { onMount } from "svelte";
     import { goto } from "$app/navigation";
     import { page } from "$app/stores"; // Import the page store
-    import { checkAuthentication, setAuthToken } from "../lib/api";
+    import {
+        checkAuthentication,
+        setAuthToken,
+        getPublicSettings,
+    } from "../lib/api";
     import { authLoading, user } from "../lib/stores";
     import Banner from "../lib/Banner.svelte";
     import CookieNotice from "../lib/CookieNotice.svelte";
     import "../app.css";
     import { browser } from "$app/environment";
 
+    // Maintenance banner. Content is driven by backend settings
+    // (`sivacor.banner_enabled` / `sivacor.banner_message`) exposed via
+    // Girder's public settings endpoint, so it can be changed/removed without
+    // rebuilding and redeploying the frontend.
     let showBanner = false;
-    if (browser && showBanner) {
-        showBanner = sessionStorage.getItem("bannerDismissed") !== "true";
-    }
+    let bannerMessage = "";
 
     let showCookieNotice = false;
     if (browser) {
@@ -25,12 +31,32 @@
         sessionStorage.setItem("cookieNoticeDismissed", "true");
     }
 
-    const maintenanceMessage =
-        "STATA images are temporarily unavailable. We apologize for the inconvenience. Please check back later or contact support for assistance.";
+    /**
+     * Loads the maintenance banner content from the backend and decides
+     * whether to show it. Dismissal is keyed on the message text so that a new
+     * message re-appears even if a previous one was dismissed this session.
+     */
+    async function loadBanner() {
+        try {
+            const settings = await getPublicSettings();
+            const enabled = settings?.["sivacor.banner_enabled"] === true;
+            bannerMessage = settings?.["sivacor.banner_message"] ?? "";
+
+            if (browser && enabled && bannerMessage) {
+                showBanner =
+                    sessionStorage.getItem("bannerDismissed") !== bannerMessage;
+            } else {
+                showBanner = false;
+            }
+        } catch (error) {
+            console.error("Failed to load banner settings:", error);
+            showBanner = false;
+        }
+    }
 
     function dismissBanner() {
         showBanner = false;
-        sessionStorage.setItem("bannerDismissed", "true");
+        sessionStorage.setItem("bannerDismissed", bannerMessage);
     }
 
     /**
@@ -69,6 +95,9 @@
     */
 
     onMount(async () => {
+        // Load the maintenance banner (independent of auth).
+        loadBanner();
+
         const url = new URL($page.url);
         const tokenFromUrl = url.searchParams.get("girderToken");
 
@@ -121,7 +150,7 @@
 {:else}
     <div class="page-wrapper">
         {#if showBanner}
-            <Banner message={maintenanceMessage} on:dismiss={dismissBanner} />
+            <Banner message={bannerMessage} on:dismiss={dismissBanner} />
         {/if}
         <slot />
         <footer class="app-footer">

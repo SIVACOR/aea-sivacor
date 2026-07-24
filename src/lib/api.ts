@@ -362,6 +362,16 @@ export async function getImages(): Promise<any> {
 }
 
 /**
+ * Fetches Girder's public (unauthenticated) settings, which SIVACOR extends
+ * with the maintenance-banner settings (`sivacor.banner_enabled`,
+ * `sivacor.banner_message`). Works without a valid auth token.
+ * @returns {Promise<Record<string, any>>} The public settings map.
+ */
+export async function getPublicSettings(): Promise<Record<string, any>> {
+    return await api('/system/public_settings');
+}
+
+/**
  * Step 2: Uploads a single chunk of a file.
  * @param {string} uploadId - The ID returned from initiateFileUpload.
  * @param {number} offset - The starting byte offset of this chunk.
