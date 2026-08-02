@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { onMount, tick } from "svelte";
     import { createEventDispatcher } from "svelte";
     import { submitJob, getImages, type ApiError } from "./api";
     import FileUploader from "./FileUploader.svelte";
@@ -30,6 +30,22 @@
      * @type {string | null}
      */
     let blockingJobId: string | null = null;
+    let statusBannerElement: HTMLElement | null = null;
+
+    /**
+     * Reports why the submission was rejected. The banner renders below the run
+     * button, which on a long form can sit at the bottom of the viewport, so
+     * scroll it into view -- otherwise clicking Run appears to do nothing, which
+     * is the behaviour this validation exists to replace.
+     */
+    async function failValidation(message: string) {
+        jobErrorMessage = message;
+        await tick();
+        statusBannerElement?.scrollIntoView({
+            block: "center",
+            behavior: "smooth",
+        });
+    }
 
     // State for email update modal
     let showEmailModal = false;
@@ -131,9 +147,6 @@
     $: if (configEntries && configEntries.length > 0 && !isInitializing) {
         saveUserSelections();
     }
-
-    // Computed reactive variable for button text
-    $: firstEntry = configEntries[0];
 
     onMount(async () => {
         try {
@@ -282,25 +295,43 @@
         jobStatusMessage = "";
         blockingJobId = null;
 
+        if ($hasInvalidOrcidEmail) {
+            await failValidation(
+                "Your ORCID account does not have a valid public email " +
+                    "address. Please update your email before submitting.",
+            );
+            return;
+        }
+
         if (!uploadedFileId) {
-            jobErrorMessage = "Please upload a file first.";
+            await failValidation("Please upload a file first.");
             return;
         }
 
         const firstEntry = configEntries[0];
         if (!firstEntry) {
-            jobErrorMessage = "No configuration available.";
+            await failValidation("No configuration available.");
             return;
         }
 
-        if (!firstEntry.executionFileName.trim()) {
-            jobErrorMessage = "Please specify an execution file name.";
-            return;
-        }
-
-        if (!firstEntry.selectedImage || !firstEntry.selectedTag) {
-            jobErrorMessage = "Please select both an image and a tag.";
-            return;
+        // Every step, not just the first: incomplete later steps used to be
+        // dropped silently by the filter below, so a half-filled step 2 was
+        // submitted as a one-step workflow without a word to the user.
+        for (const [index, entry] of configEntries.entries()) {
+            // Only name the step when there is more than one to disambiguate.
+            const step = configEntries.length > 1 ? `Step ${index + 1}: ` : "";
+            if (!entry.executionFileName.trim()) {
+                await failValidation(
+                    `${step}Please specify an execution file name.`,
+                );
+                return;
+            }
+            if (!entry.selectedImage || !entry.selectedTag) {
+                await failValidation(
+                    `${step}Please select both an image and a tag.`,
+                );
+                return;
+            }
         }
 
         isJobRunning = true;
@@ -308,22 +339,15 @@
         jobStatusMessage = `Starting job for image: ${fullImageName} with file: ${firstEntry.executionFileName}...`;
 
         try {
-            const validConfig = configEntries.filter(
-                (entry) =>
-                    entry.selectedImage &&
-                    entry.selectedTag &&
-                    entry.executionFileName,
-            ) as Array<{
+            // Submit every step: the loop above proved they are all complete,
+            // so there is nothing left to filter out.
+            const validConfig = configEntries as Array<{
                 id: string;
                 selectedImage: string;
                 selectedTag: string;
                 executionFileName: string;
                 networkIsolation: boolean;
             }>;
-
-            if (validConfig.length === 0) {
-                throw new Error("No valid configuration entries to submit");
-            }
 
             const response = await submitJob(
                 uploadedFileId,
@@ -359,6 +383,11 @@
             // actually went wrong. Clear the "Starting job..." message so it
             // cannot be mistaken for the outcome.
             jobStatusMessage = "";
+            await tick();
+            statusBannerElement?.scrollIntoView({
+                block: "center",
+                behavior: "smooth",
+            });
         } finally {
             isJobRunning = false;
         }
@@ -607,19 +636,15 @@
                 {/each}
             </div>
 
+            <!-- Only disabled while a submission is in flight, to stop a double
+                 submit. Everything else is validated in runJob() on click, so an
+                 incomplete form says what is missing instead of leaving the user
+                 with a dead button and no explanation. -->
             <button
                 on:click={runJob}
-                disabled={!uploadedFileId ||
-                    !firstEntry?.executionFileName?.trim() ||
-                    !firstEntry?.selectedImage ||
-                    !firstEntry?.selectedTag ||
-                    isJobRunning ||
-                    $hasInvalidOrcidEmail}
+                disabled={isJobRunning}
                 class="run-button"
                 class:running={isJobRunning}
-                title={$hasInvalidOrcidEmail
-                    ? "Cannot submit: Your ORCID account has an invalid email address. Please make your email at orcid.org public or contact support."
-                    : ""}
             >
                 {#if isJobRunning}
                     <div class="md-spinner"></div>
@@ -668,6 +693,7 @@
                 class:error={jobErrorMessage}
                 class:success={!jobErrorMessage}
                 role={jobErrorMessage ? "alert" : "status"}
+                bind:this={statusBannerElement}
             >
                 <span class="material-icons status-icon">
                     {jobErrorMessage ? "error" : "check_circle"}
