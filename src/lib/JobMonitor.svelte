@@ -433,10 +433,21 @@
 
             // Check for URL query parameters
             const urlParams = new URLSearchParams(window.location.search);
+            const jobIdParam = urlParams.get("jobId");
             const submissionId = urlParams.get("submissionId");
             const submissionName = urlParams.get("submissionName");
 
             let submission = null;
+
+            // ?jobId= addresses a submission by its job rather than its folder,
+            // so it works even before a worker has created the folder. This is
+            // what JobRunner's 409 banner links to.
+            if (jobIdParam) {
+                currentJobId = jobIdParam;
+                latestSubmission = await getSubmissionByJobId(jobIdParam);
+                startPolling(jobIdParam);
+                return;
+            }
 
             // Try to get submission by ID or name if provided in URL
             if (submissionId) {

@@ -26,6 +26,19 @@ interface Folder {
     [key: string]: any;
 }
 
+/**
+ * An error thrown by api() for a non-OK response whose body Girder filled in.
+ * `details.extra` is Girder's RestException `extra` field -- for the 409 from
+ * /sivacor/submit_job it holds the id of the submission already in progress.
+ */
+export interface ApiError extends Error {
+    statusCode?: number;
+    details?: {
+        message?: string;
+        extra?: string;
+    };
+}
+
 interface JobDetails {
     _id: string;
     status: number;
@@ -278,7 +291,7 @@ export async function api(endpoint: string, options: RequestInit = {}): Promise<
                 const errorData = await res.json();
                 // If the error response contains a message field, use it
                 if (errorData && errorData.message) {
-                    const error = new Error(errorData.message) as any;
+                    const error = new Error(errorData.message) as ApiError;
                     error.statusCode = res.status;
                     error.details = errorData;
                     throw error;

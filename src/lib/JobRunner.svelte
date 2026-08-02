@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { createEventDispatcher } from "svelte";
-    import { submitJob, getImages } from "./api";
+    import { submitJob, getImages, type ApiError } from "./api";
     import FileUploader from "./FileUploader.svelte";
     import { hasInvalidOrcidEmail, user } from "./stores";
     import EmailUpdateModal from "./EmailUpdateModal.svelte";
@@ -24,6 +24,12 @@
     let jobErrorMessage: string | null = null;
     /** @type {string | null} */
     let jobId: string | null = null;
+    /**
+     * Job id of an unfinished submission that blocked this one (from the 409's
+     * `extra`), so the banner can link straight to it.
+     * @type {string | null}
+     */
+    let blockingJobId: string | null = null;
 
     // State for email update modal
     let showEmailModal = false;
@@ -269,6 +275,13 @@
     }
 
     async function runJob() {
+        // Clear the previous attempt's banner up front. The guards below only
+        // set jobErrorMessage, so without this a stale success message would
+        // linger underneath an error icon.
+        jobErrorMessage = null;
+        jobStatusMessage = "";
+        blockingJobId = null;
+
         if (!uploadedFileId) {
             jobErrorMessage = "Please upload a file first.";
             return;
@@ -291,7 +304,6 @@
         }
 
         isJobRunning = true;
-        jobErrorMessage = null;
         const fullImageName = `${firstEntry.selectedImage}:${firstEntry.selectedTag}`;
         jobStatusMessage = `Starting job for image: ${fullImageName} with file: ${firstEntry.executionFileName}...`;
 
@@ -336,7 +348,17 @@
                 jobErrorMessage =
                     "Failed to submit job. Check console for details.";
             }
-            jobStatusMessage = "Job submission failed.";
+            // A 409 means an earlier submission of ours is still unfinished;
+            // the server puts its job id in `extra` so we can link to it.
+            const apiError = error as ApiError;
+            if (apiError?.statusCode === 409 && apiError.details?.extra) {
+                blockingJobId = apiError.details.extra;
+            }
+            // No "Job submission failed." heading: the banner is already red
+            // and carries an error icon, and jobErrorMessage below says what
+            // actually went wrong. Clear the "Starting job..." message so it
+            // cannot be mistaken for the outcome.
+            jobStatusMessage = "";
         } finally {
             isJobRunning = false;
         }
@@ -640,19 +662,38 @@
             {/if}
         </div>
 
-        {#if jobStatusMessage}
+        {#if jobStatusMessage || jobErrorMessage}
             <div
                 class="status-banner"
                 class:error={jobErrorMessage}
                 class:success={!jobErrorMessage}
+                role={jobErrorMessage ? "alert" : "status"}
             >
                 <span class="material-icons status-icon">
                     {jobErrorMessage ? "error" : "check_circle"}
                 </span>
                 <div class="status-content">
-                    <div class="status-message">{jobStatusMessage}</div>
-                    {#if jobId && !jobErrorMessage}
-                        <div class="job-id">Job ID: {jobId}</div>
+                    {#if jobErrorMessage}
+                        <div class="status-message">{jobErrorMessage}</div>
+                        {#if blockingJobId}
+                            <!-- data-sveltekit-reload: this navigates within
+                                 the same route, so a client-side navigation
+                                 would leave JobMonitor mounted and never re-run
+                                 its onMount recovery. -->
+                            <a
+                                class="blocking-job-link"
+                                href="/?jobId={blockingJobId}"
+                                data-sveltekit-reload
+                            >
+                                <span class="material-icons">open_in_new</span>
+                                Go to your submission in progress
+                            </a>
+                        {/if}
+                    {:else}
+                        <div class="status-message">{jobStatusMessage}</div>
+                        {#if jobId}
+                            <div class="job-id">Job ID: {jobId}</div>
+                        {/if}
                     {/if}
                 </div>
             </div>
@@ -1180,6 +1221,25 @@
         opacity: 0.8;
         font-family: "Courier New", monospace;
         margin-top: 4px;
+    }
+
+    .blocking-job-link {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        margin-top: var(--md-spacing-xs);
+        color: inherit;
+        font-size: var(--md-font-body2);
+        font-weight: 500;
+    }
+
+    .blocking-job-link .material-icons {
+        font-size: 1rem;
+    }
+
+    .blocking-job-link:focus-visible {
+        outline: 3px solid currentColor;
+        outline-offset: 2px;
     }
 
     @keyframes slideIn {
