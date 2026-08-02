@@ -5,7 +5,8 @@
         fetchJobDetails,
         cancelJob,
         JOB_POLLING_INTERVAL,
-        getLatestSubmission,
+        getLatestSubmissionJob,
+        getSubmissionByJobId,
         getSubmissionByIdOrName,
         getSubmissionFolderUrl,
         downloadFile,
@@ -37,6 +38,9 @@
     let currentJobId: string | null = null;
     let checkingLatestSubmission = true;
     let latestSubmission: any = null;
+    // Set when currentJobId names a job we could not load at all, so the
+    // monitor falls back to the runner rather than to an inert empty state.
+    let jobUnavailable = false;
 
     // WebSocket logs state
     let websocket: WebSocket | null = null;
@@ -67,10 +71,20 @@
     // Delete submission state
     let isDeletingSubmission = false;
 
-    $: showRunner = !isMonitoring && !currentJobId && !checkingLatestSubmission;
+    $: showRunner =
+        !isMonitoring &&
+        !checkingLatestSubmission &&
+        (!currentJobId || jobUnavailable);
 
     // Reactive check for polling state
     $: isJobActive = jobDetails && jobDetails.status < 3;
+
+    // The submission folder is created by the worker, as the first thing
+    // prepare_submission does, so an active job without one has not been picked
+    // up yet. (The job's own status is RUNNING from the moment it is submitted,
+    // so it cannot tell us this.) Under one-VM-per-submission autoscaling this
+    // wait is a cold boot -- a couple of minutes -- not an instant.
+    $: isAwaitingWorker = isJobActive && !latestSubmission;
 
     // File type mappings for downloadable files
     const FILE_TYPE_LABELS = {
@@ -306,12 +320,10 @@
         try {
             const details = await fetchJobDetails(jobId);
             try {
-                const submission = await getLatestSubmission();
-                if (
-                    submission &&
-                    submission.meta &&
-                    submission.meta.job_id === jobId
-                ) {
+                // Not yet there while the job waits for a worker; this is what
+                // picks it up once prepare_submission creates it.
+                const submission = await getSubmissionByJobId(jobId);
+                if (submission) {
                     latestSubmission = submission;
                 }
             } catch (submissionError) {
@@ -348,6 +360,13 @@
             console.error("Error fetching job details:", e);
             errorMessage = "Could not fetch job status.";
             stopPolling();
+            if (!jobDetails) {
+                // The job never loaded at all -- most likely it no longer
+                // exists. Give up on it instead of leaving the user on a "No
+                // Active Jobs" screen they cannot act on, and stop shouldPoll
+                // from immediately restarting the poll that just failed.
+                jobUnavailable = true;
+            }
         }
     }
 
@@ -393,6 +412,7 @@
         jobStatusText = null;
         errorMessage = null;
         currentJobId = null;
+        jobUnavailable = false;
         latestSubmission = null;
         isLogsVisible = false;
         streamingLogs = [];
@@ -435,18 +455,26 @@
                 }
             }
 
-            // If no URL parameter provided or submission not found, get the latest
-            if (!submission) {
-                submission = await getLatestSubmission();
+            if (submission) {
+                latestSubmission = submission;
+                currentJobId = submission.meta?.job_id ?? null;
+            } else {
+                // Recover from the job, not from the submission folder. The
+                // folder is created on the worker by prepare_submission, so a
+                // submission still waiting for one has no folder to be found
+                // by -- and looking for the newest folder would silently
+                // resurrect the *previous* submission instead. The job exists
+                // from the moment it was submitted; its folder is an
+                // enrichment that arrives once a worker picks the job up.
+                const job = await getLatestSubmissionJob();
+                if (job) {
+                    currentJobId = job._id;
+                    latestSubmission = await getSubmissionByJobId(job._id);
+                }
             }
 
-            latestSubmission = submission;
-
-            if (submission && submission.meta && submission.meta.job_id) {
-                currentJobId = submission.meta.job_id;
-                if (currentJobId) {
-                    startPolling(currentJobId);
-                }
+            if (currentJobId) {
+                startPolling(currentJobId);
             }
         } catch (error) {
             console.error("Error checking latest submission:", error);
@@ -468,6 +496,7 @@
     let shouldPoll = false;
     $: shouldPoll =
         !!currentJobId &&
+        !jobUnavailable &&
         !isMonitoring &&
         (!jobDetails || jobDetails.status < 3);
 
@@ -483,6 +512,9 @@
     function handleJobSubmitted(event: any) {
         const newJobId = event.detail.jobId;
         currentJobId = newJobId;
+        jobUnavailable = false;
+        // The worker creates the submission folder; until it does, the monitor
+        // shows the "waiting for a worker" state.
         latestSubmission = null;
 
         // Dispatch job submission for title management
@@ -758,6 +790,26 @@
                 </div>
 
                 {#if isJobActive}
+                    {#if isAwaitingWorker}
+                        <div class="result-section waiting">
+                            <div class="result-header">
+                                <span class="material-icons result-icon"
+                                    >hourglass_top</span
+                                >
+                                <div>
+                                    <h3>Waiting for a worker</h3>
+                                    <p>
+                                        Your submission is queued. A machine is
+                                        being started to run it, which usually
+                                        takes a few minutes. This page updates
+                                        itself &mdash; you can leave and come
+                                        back to it.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    {/if}
+
                     <div class="active-job-section">
                         <div class="polling-indicator">
                             <div class="pulse-dot"></div>
@@ -774,97 +826,99 @@
                         </button>
                     </div>
 
-                    <!-- Live Logs Section -->
-                    <div class="live-logs-section">
-                        <button
-                            class="logs-toggle-button"
-                            on:click={toggleLogsVisibility}
-                            type="button"
-                            aria-expanded={isLogsVisible}
-                        >
-                            <span
-                                class="material-icons logs-toggle-icon"
-                                class:expanded={isLogsVisible}
-                            >
-                                {isLogsVisible ? "expand_less" : "expand_more"}
-                            </span>
-                            <span class="logs-toggle-text">
-                                Live Container Logs
-                                {#if streamingLogs.length > 0}
-                                    <span class="logs-count"
-                                        >({streamingLogs.length})</span
-                                    >
-                                {/if}
-                            </span>
-                            {#if isConnectingToLogs}
-                                <div class="mini-spinner"></div>
-                            {/if}
-                        </button>
-
-                        <!-- Clear Logs Button -->
-                        {#if isLogsVisible && streamingLogs.length > 0}
+                    {#if !isAwaitingWorker}
+                        <!-- Live Logs Section -->
+                        <div class="live-logs-section">
                             <button
-                                class="clear-logs-button"
-                                on:click={clearLogs}
+                                class="logs-toggle-button"
+                                on:click={toggleLogsVisibility}
                                 type="button"
-                                title="Clear all logs"
+                                aria-expanded={isLogsVisible}
                             >
-                                <span class="material-icons">clear_all</span>
-                                <span>Clear Logs</span>
-                            </button>
-                        {/if}
-
-                        {#if isLogsVisible}
-                            <div class="logs-content">
-                                {#if logsConnectionError}
-                                    <div class="logs-error">
-                                        <span class="material-icons">error</span
+                                <span
+                                    class="material-icons logs-toggle-icon"
+                                    class:expanded={isLogsVisible}
+                                >
+                                    {isLogsVisible ? "expand_less" : "expand_more"}
+                                </span>
+                                <span class="logs-toggle-text">
+                                    Live Container Logs
+                                    {#if streamingLogs.length > 0}
+                                        <span class="logs-count"
+                                            >({streamingLogs.length})</span
                                         >
-                                        <span>{logsConnectionError}</span>
-                                        <button
-                                            class="retry-logs-button"
-                                            disabled={isConnectingToLogs}
-                                            on:click={connectToLogs}
-                                        >
-                                            Retry
-                                        </button>
-                                    </div>
-                                {:else if streamingLogs.length === 0 && !isConnectingToLogs}
-                                    <div class="logs-empty">
-                                        <span class="material-icons"
-                                            >hourglass_empty</span
-                                        >
-                                        <span
-                                            >Waiting for container logs...</span
-                                        >
-                                    </div>
-                                {:else}
-                                    <div
-                                        class="streaming-logs-container"
-                                        role="log"
-                                        aria-live="off"
-                                        bind:this={logsContainerElement}
-                                    >
-                                        {#each streamingLogs as log, index (log.timestamp + "-" + index)}
-                                            <div
-                                                class="log-entry"
-                                                data-level={log.level}
-                                            >
-                                                <span class="log-timestamp">
-                                                    {formatTimestamp(
-                                                        log.timestamp,
-                                                    )}
-                                                </span>
-                                                <span class="log-message">
-                                                    {log.message}
-                                                </span>
-                                            </div>
-                                        {/each}
-                                    </div>
+                                    {/if}
+                                </span>
+                                {#if isConnectingToLogs}
+                                    <div class="mini-spinner"></div>
                                 {/if}
-                            </div>
-                        {/if}
-                    </div>
+                            </button>
+
+                            <!-- Clear Logs Button -->
+                            {#if isLogsVisible && streamingLogs.length > 0}
+                                <button
+                                    class="clear-logs-button"
+                                    on:click={clearLogs}
+                                    type="button"
+                                    title="Clear all logs"
+                                >
+                                    <span class="material-icons">clear_all</span>
+                                    <span>Clear Logs</span>
+                                </button>
+                            {/if}
+
+                            {#if isLogsVisible}
+                                <div class="logs-content">
+                                    {#if logsConnectionError}
+                                        <div class="logs-error">
+                                            <span class="material-icons">error</span
+                                            >
+                                            <span>{logsConnectionError}</span>
+                                            <button
+                                                class="retry-logs-button"
+                                                disabled={isConnectingToLogs}
+                                                on:click={connectToLogs}
+                                            >
+                                                Retry
+                                            </button>
+                                        </div>
+                                    {:else if streamingLogs.length === 0 && !isConnectingToLogs}
+                                        <div class="logs-empty">
+                                            <span class="material-icons"
+                                                >hourglass_empty</span
+                                            >
+                                            <span
+                                                >Waiting for container logs...</span
+                                            >
+                                        </div>
+                                    {:else}
+                                        <div
+                                            class="streaming-logs-container"
+                                            role="log"
+                                            aria-live="off"
+                                            bind:this={logsContainerElement}
+                                        >
+                                            {#each streamingLogs as log, index (log.timestamp + "-" + index)}
+                                                <div
+                                                    class="log-entry"
+                                                    data-level={log.level}
+                                                >
+                                                    <span class="log-timestamp">
+                                                        {formatTimestamp(
+                                                            log.timestamp,
+                                                        )}
+                                                    </span>
+                                                    <span class="log-message">
+                                                        {log.message}
+                                                    </span>
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    {/if}
+                                </div>
+                            {/if}
+                        </div>
+                    {/if}
                 {:else if jobDetails.status === 3}
                     <!-- SUCCESS -->
                     <div class="result-section success">
@@ -1601,6 +1655,14 @@
         background-color: rgba(var(--md-error-rgb), 0.1);
         border: 1px solid rgba(var(--md-error-rgb), 0.3);
         color: var(--md-error);
+    }
+
+    /* Deliberately the primary tint, not the warning one: this sits directly
+       above the amber .active-job-section and needs to read as distinct. */
+    .result-section.waiting {
+        background-color: rgba(var(--md-primary-rgb), 0.08);
+        border: 1px solid rgba(var(--md-primary-rgb), 0.3);
+        color: var(--md-primary);
     }
 
     .result-section.canceled {

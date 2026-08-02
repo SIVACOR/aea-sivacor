@@ -92,19 +92,58 @@ export async function getUploadsFolder() {
     return folder[0]._id;
 }
 
-export async function getLatestSubmission(): Promise<Folder | null> {
+async function getSubmissionsCollectionId(): Promise<string | null> {
     const collections = await api('/collection?name=Submissions');
     if (!Array.isArray(collections) || collections.length !== 1) {
         return null;
         //throw new Error('Could not find Submissions collection.');
     }
-    const collectionId = collections[0]._id;
-    const submissions = await api(`/folder?parentType=collection&parentId=${collectionId}&limit=1&sort=created&sortdir=-1`);
+    return collections[0]._id;
+}
+
+/**
+ * Fetches the current user's most recent submission job.
+ *
+ * This is the authoritative record of a submission: the job document exists
+ * from the moment /sivacor/submit_job returns, whereas the submission folder is
+ * only created later, on the worker, by prepare_submission. A submission that
+ * is still waiting for a worker therefore has a job but no folder.
+ *
+ * /job is scoped to the current user by the server, so unlike a folder listing
+ * it does not rely on ACLs to keep other users' submissions out.
+ *
+ * @returns {Promise<JobDetails | null>} The newest submission job, or null.
+ */
+export async function getLatestSubmissionJob(): Promise<JobDetails | null> {
+    const types = encodeURIComponent(JSON.stringify(['sivacor_submission']));
+    const jobs = await api(`/job?types=${types}&limit=1&sort=created&sortdir=-1`);
+    if (!Array.isArray(jobs) || jobs.length === 0) {
+        return null;
+    }
+    return jobs[0];
+}
+
+/**
+ * Fetches the submission folder belonging to a given job, if the worker has
+ * created it yet.
+ * @param {string} jobId - The submission job ID.
+ * @returns {Promise<Folder | null>} The submission folder, or null if the
+ *   worker has not created it yet.
+ */
+export async function getSubmissionByJobId(jobId: string): Promise<Folder | null> {
+    const collectionId = await getSubmissionsCollectionId();
+    if (!collectionId) {
+        return null;
+    }
+    // `jobId` is a SIVACOR-specific filter on Girder's folder listing; it
+    // requires parentType/parentId to be given alongside it.
+    const submissions = await api(
+        `/folder?parentType=collection&parentId=${collectionId}&jobId=${encodeURIComponent(jobId)}`
+    );
     if (!Array.isArray(submissions) || submissions.length === 0) {
         return null;
-    } else {
-        return submissions[0];
     }
+    return submissions[0];
 }
 
 /**
@@ -114,11 +153,10 @@ export async function getLatestSubmission(): Promise<Folder | null> {
  */
 export async function getSubmissionByIdOrName(idOrName: string): Promise<Folder | null> {
     // First, try to get the Submissions collection
-    const collections = await api('/collection?name=Submissions');
-    if (!Array.isArray(collections) || collections.length !== 1) {
+    const collectionId = await getSubmissionsCollectionId();
+    if (!collectionId) {
         return null;
     }
-    const collectionId = collections[0]._id;
 
     // Try to fetch by ID first (assuming it's a folder ID)
     try {
