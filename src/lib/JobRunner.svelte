@@ -1,8 +1,14 @@
 <script lang="ts">
     import { onMount, tick } from "svelte";
     import { createEventDispatcher } from "svelte";
-    import { submitJob, getImages, type ApiError } from "./api";
+    import {
+        submitJob,
+        getImages,
+        type ApiError,
+        type WorkflowDefinition,
+    } from "./api";
     import FileUploader from "./FileUploader.svelte";
+    import WorkflowImport from "./WorkflowImport.svelte";
     import { hasInvalidOrcidEmail, user } from "./stores";
     import EmailUpdateModal from "./EmailUpdateModal.svelte";
 
@@ -211,6 +217,37 @@
     }
 
     /**
+     * Replaces the form's steps and secrets with an imported workflow
+     * definition. WorkflowImport has already validated it against the schema
+     * served by the backend and against the available images, so this only has
+     * to translate the server's field names into the form's.
+     *
+     * Assigning configEntries goes through the same reactive save as a click or
+     * a keystroke, so an imported workflow is cached in localStorage exactly
+     * like a hand-filled one. Secrets follow the manual path too: in memory
+     * only, never persisted.
+     *
+     * @param {CustomEvent<WorkflowDefinition>} event - The imported definition.
+     */
+    function handleWorkflowImport(event: CustomEvent<WorkflowDefinition>) {
+        const definition = event.detail;
+        configEntries = definition.stages.map((stage) => ({
+            id: crypto.randomUUID(),
+            selectedImage: stage.image_name,
+            selectedTag: stage.image_tag,
+            executionFileName: stage.main_file,
+            networkIsolation: stage.network_isolation ?? false,
+        }));
+        jobSecrets = Object.fromEntries(
+            (definition.env_secrets ?? []).map(({ key, value }) => [key, value]),
+        );
+        // A stale banner from an earlier attempt would otherwise sit under the
+        // run button describing a form that no longer exists.
+        jobErrorMessage = null;
+        blockingJobId = null;
+    }
+
+    /**
      * Add a new configuration entry
      */
     function addConfigEntry() {
@@ -402,7 +439,7 @@
         </div>
         <p class="runner-description">
             Upload a file, select Docker image and tag, then specify your main
-            execution file.
+            execution file — or import the whole workflow from a YAML/JSON file.
         </p>
     </div>
 
@@ -410,6 +447,12 @@
         <FileUploader on:uploadcomplete={handleUploadComplete} />
 
         <div class="config-section">
+            <WorkflowImport
+                {imagesData}
+                disabled={isJobRunning}
+                on:import={handleWorkflowImport}
+            />
+
             {#each configEntries as entry, index (entry.id)}
                 <div class="config-row">
                     <div class="step-badge">{index + 1}</div>

@@ -1,5 +1,7 @@
 /node_modules/
 /public/build/
+# adapter-node writes the production bundle here (npm run build / build-production.sh)
+/build/
 
 .DS_Store
 .svelte-kit

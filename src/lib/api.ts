@@ -63,6 +63,26 @@ interface ApiJobStageConfig {
     network_isolation: boolean;
 }
 
+/**
+ * One workflow stage as it appears in a workflow definition file (and in the
+ * submit_job body): the server's vocabulary, not the form's.
+ */
+export interface WorkflowStage {
+    image_name: string;
+    image_tag: string;
+    main_file: string;
+    network_isolation?: boolean;
+}
+
+/**
+ * A whole workflow definition, i.e. what a user can import from a YAML/JSON
+ * file. Shaped by the `stage_schema` served from /sivacor/workflow_schema.
+ */
+export interface WorkflowDefinition {
+    stages: WorkflowStage[];
+    env_secrets?: Array<{ key: string; value: string }>;
+}
+
 // API Base URL from environment variable with fallback for development
 const BASE_URL = env.PUBLIC_SIVACOR_API_URL || 'https://girder.sivacor.org/api/v1';
 export const JOB_POLLING_INTERVAL = 5000; // 5 seconds
@@ -410,6 +430,16 @@ export async function getImages(): Promise<any> {
     const endpoint = '/sivacor/image_tags';
     const response = await api(endpoint);
     return response;
+}
+
+/**
+ * Fetches the JSON schema a workflow definition must satisfy -- the very schema
+ * /sivacor/submit_job validates its body against. Fetched rather than duplicated
+ * here so an imported file is checked against the server's current rules.
+ * @returns {Promise<Record<string, any>>} The workflow JSON schema.
+ */
+export async function getWorkflowSchema(): Promise<Record<string, unknown>> {
+    return await api('/sivacor/workflow_schema');
 }
 
 /**
