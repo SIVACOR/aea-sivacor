@@ -1,0 +1,6 @@
+cat("SIVACOR regression test package\n")
+x <- sum(1:100)
+cat("sum:", x, "\n")
+Sys.sleep(8)
+cat("done\n")
+write.csv(data.frame(v=1:3), "out.csv")
