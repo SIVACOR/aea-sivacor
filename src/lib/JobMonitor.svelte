@@ -319,10 +319,15 @@
     async function checkJobStatus(jobId: string) {
         try {
             const details = await fetchJobDetails(jobId);
+            // The user may have reset or submitted a new job while this was in
+            // flight; adopting the response now would resurrect the old job.
+            if (jobId !== currentJobId) return;
+
             try {
                 // Not yet there while the job waits for a worker; this is what
                 // picks it up once prepare_submission creates it.
                 const submission = await getSubmissionByJobId(jobId);
+                if (jobId !== currentJobId) return;
                 if (submission) {
                     latestSubmission = submission;
                 }
@@ -333,21 +338,25 @@
                 );
             }
 
-            if (details.status >= 3) {
-                stopPolling();
-                // Load performance metrics when job finishes (success or error)
-                await loadPerformanceMetrics();
-            }
-
             if (details.status === 4) {
                 errorMessage =
                     (details as any).error ||
                     "The job encountered an unspecified error.";
             }
 
+            // Publish the terminal status *before* awaiting anything else:
+            // shouldPoll keys off jobDetails, so leaving it stale across the
+            // await below lets the effect restart polling on a finished job,
+            // which re-enters here and reloads the metrics on a loop.
             jobDetails = details;
             jobStatusText =
                 STATUS[details.status as keyof typeof STATUS] || "UNKNOWN";
+
+            if (details.status >= 3) {
+                stopPolling();
+                // Load performance metrics when job finishes (success or error)
+                await loadPerformanceMetrics();
+            }
 
             // Dispatch job state update for title management
             dispatch("jobstateupdate", {
@@ -371,6 +380,14 @@
     }
 
     function startPolling(jobId: string) {
+        // Idempotent: checkLatestSubmission awaits between setting currentJobId
+        // and polling, so the shouldPoll effect can get here first. Without this
+        // the earlier interval is orphaned and keeps polling a job the monitor
+        // has already moved on from, clobbering the current one's state.
+        if (pollIntervalId) {
+            clearInterval(pollIntervalId);
+            pollIntervalId = null;
+        }
         isMonitoring = true;
         checkJobStatus(jobId);
         pollIntervalId = setInterval(() => {
@@ -514,7 +531,9 @@
     // Use an effect to handle polling without creating infinite loops
     $: if (shouldPoll && currentJobId) {
         setTimeout(() => {
-            if (currentJobId) {
+            // Re-check: currentJobId may have changed (or polling may already
+            // have started) between scheduling this and running it.
+            if (shouldPoll && currentJobId) {
                 startPolling(currentJobId);
             }
         }, 0);
@@ -596,6 +615,7 @@
 
     async function loadPerformanceMetrics() {
         if (
+            isLoadingMetrics ||
             !latestSubmission ||
             !latestSubmission._id ||
             !latestSubmission.meta?.stages
@@ -603,8 +623,10 @@
             return;
         }
 
+        // Deliberately not cleared here: blanking the list up front makes any
+        // reload flash the section out and back in. The results replace it
+        // wholesale once they arrive.
         isLoadingMetrics = true;
-        performanceMetrics = [];
 
         try {
             const stages = latestSubmission.meta.stages;
