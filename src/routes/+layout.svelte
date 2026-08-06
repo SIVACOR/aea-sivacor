@@ -7,7 +7,7 @@
         setAuthToken,
         getPublicSettings,
     } from "../lib/api";
-    import { authLoading, user } from "../lib/stores";
+    import { authLoading } from "../lib/stores";
     import Banner from "../lib/Banner.svelte";
     import CookieNotice from "../lib/CookieNotice.svelte";
     import "../app.css";
@@ -40,7 +40,8 @@
         try {
             const settings = await getPublicSettings();
             const enabled = settings?.["sivacor.banner_enabled"] === true;
-            bannerMessage = settings?.["sivacor.banner_message"] ?? "";
+            const message = settings?.["sivacor.banner_message"];
+            bannerMessage = typeof message === "string" ? message : "";
 
             if (browser && enabled && bannerMessage) {
                 showBanner =
@@ -59,40 +60,10 @@
         sessionStorage.setItem("bannerDismissed", bannerMessage);
     }
 
-    /**
-     * Check if the email is an invalid ORCID email (starts with 4 digits and ends with @orcid.org)
-     */
-    function isInvalidOrcidEmail(email: string): boolean {
-        if (!email) return false;
-        return /^\d{4}.*@orcid\.org$/.test(email);
-    }
-
-    /**
-     * Show warning dialog for invalid ORCID emails
-     */
-    function showOrcidEmailWarning() {
-        if (!browser) return;
-
-        const hasSeenWarning = sessionStorage.getItem("orcidEmailWarningSeen");
-        if (hasSeenWarning === "true") return;
-
-        const message =
-            `Your ORCID account does not have a valid public email address.\n\n` +
-            `We recommend updating your email address to ensure proper communication.\n\n` +
-            `You can update your email:\n` +
-            `• On ORCID.org: Make your email public in your ORCID profile settings\n` +
-            `• Locally on our system: Contact support to update your email`;
-
-        alert(message);
-        sessionStorage.setItem("orcidEmailWarningSeen", "true");
-    }
-
-    // Reactive statement to check for invalid ORCID emails when user logs in
-    /* 
-    $: if ($user && $user.email && isInvalidOrcidEmail($user.email)) {
-        showOrcidEmailWarning();
-    }
-    */
+    // The placeholder-ORCID-email warning that used to live here (a disabled
+    // alert() plus its own copy of the detection regex) has been superseded by
+    // the `hasInvalidOrcidEmail` store and EmailUpdateModal, which JobRunner
+    // shows inline. See ORCID_EMAIL_WARNING.md; the old version is in git.
 
     onMount(async () => {
         // Load the maintenance banner (independent of auth).

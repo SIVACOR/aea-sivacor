@@ -209,9 +209,9 @@
      * @param {CustomEvent<{fileId: string}>} event - Event containing the new file ID.
      */
     /**
-     * @param {any} event - The upload complete event
+     * @param {CustomEvent<{ fileId: string }>} event - The upload complete event
      */
-    function handleUploadComplete(event: any) {
+    function handleUploadComplete(event: CustomEvent<{ fileId: string }>) {
         uploadedFileId = event.detail.fileId;
         jobStatusMessage = `File uploaded! ID: ${uploadedFileId}. Ready to run job.`;
     }
@@ -320,7 +320,8 @@
     }
 
     function removeSecret(key: string) {
-        const { [key]: _, ...rest } = jobSecrets;
+        const rest = { ...jobSecrets };
+        delete rest[key];
         jobSecrets = rest;
     }
 
@@ -621,7 +622,11 @@
                         >
                     </button>
                 </div>
-                {#each Object.entries(jobSecrets) as [key, value]}
+                <!-- Keyed by the variable name, which is unique by construction
+                     (it is an object key). Safe despite renames re-keying the
+                     row, because the name is committed on change -- i.e. on
+                     blur -- not on every keystroke. -->
+                {#each Object.entries(jobSecrets) as [key, value] (key)}
                     <div class="secret-row">
                         <label for="secret-key-{key}" class="sr-only">
                             Environment variable name

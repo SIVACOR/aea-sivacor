@@ -15,6 +15,9 @@
         getGirderUrl,
         fetchPerformanceMetrics,
         deleteSubmission,
+        type Folder,
+        type JobDetails,
+        type PerformanceMetrics,
         type WorkflowStage,
     } from "./api";
     import JobRunner from "./JobRunner.svelte";
@@ -33,13 +36,13 @@
 
     // State
     let isMonitoring = false;
-    let jobDetails: any = null;
+    let jobDetails: JobDetails | null = null;
     let jobStatusText: string | null = null;
     let errorMessage: string | null = null;
     let pollIntervalId: ReturnType<typeof setInterval> | null = null;
     let currentJobId: string | null = null;
     let checkingLatestSubmission = true;
-    let latestSubmission: any = null;
+    let latestSubmission: Folder | null = null;
     // Set when currentJobId names a job we could not load at all, so the
     // monitor falls back to the runner rather than to an inert empty state.
     let jobUnavailable = false;
@@ -66,7 +69,7 @@
     let performanceMetrics: Array<{
         stageNumber: number;
         stageName: string;
-        data: any;
+        data: PerformanceMetrics;
     }> = [];
     let isLoadingMetrics = false;
 
@@ -89,9 +92,12 @@
     $: isAwaitingWorker = isJobActive && !latestSubmission;
 
     // Written by the worker alongside the run's other metadata, so it is only
-    // there once a submission folder exists.
-    $: hasWorkflowDefinition =
-        (latestSubmission?.meta?.stages?.length ?? 0) > 0;
+    // there once a submission folder exists. `meta` is an untyped Girder
+    // document, so this is the one place the shape is asserted.
+    $: submissionStages = Array.isArray(latestSubmission?.meta?.stages)
+        ? (latestSubmission.meta.stages as WorkflowStage[])
+        : [];
+    $: hasWorkflowDefinition = submissionStages.length > 0;
 
     // File type mappings for downloadable files
     const FILE_TYPE_LABELS = {
@@ -114,9 +120,10 @@
             if (entry.success && !isSuccess) {
                 continue; // Skip success-only files if job not successful
             }
-            if (meta[fileKey]) {
+            const fileId = meta[fileKey];
+            if (typeof fileId === "string" && fileId) {
                 files.push({
-                    id: meta[fileKey],
+                    id: fileId,
                     label: entry.label,
                 });
             }
@@ -329,7 +336,7 @@
      * there is nothing here to strip, only the placeholder to document.
      */
     function buildWorkflowYaml(): string {
-        const stages = latestSubmission?.meta?.stages ?? [];
+        const stages = submissionStages;
         const name = latestSubmission?.name ?? "submission";
 
         const header = [
@@ -421,7 +428,7 @@
 
             if (details.status === 4) {
                 errorMessage =
-                    (details as any).error ||
+                    details.error ||
                     "The job encountered an unspecified error.";
             }
 
@@ -566,7 +573,8 @@
 
             if (submission) {
                 latestSubmission = submission;
-                currentJobId = submission.meta?.job_id ?? null;
+                const metaJobId = submission.meta?.job_id;
+                currentJobId = typeof metaJobId === "string" ? metaJobId : null;
             } else {
                 // Recover from the job, not from the submission folder. The
                 // folder is created on the worker by prepare_submission, so a
@@ -620,7 +628,7 @@
         }, 0);
     }
 
-    function handleJobSubmitted(event: any) {
+    function handleJobSubmitted(event: CustomEvent<{ jobId: string }>) {
         const newJobId = event.detail.jobId;
         currentJobId = newJobId;
         jobUnavailable = false;
@@ -709,15 +717,18 @@
         // wholesale once they arrive.
         isLoadingMetrics = true;
 
-        try {
-            const stages = latestSubmission.meta.stages;
+        // Pinned before the awaits below: a reset mid-load would otherwise
+        // leave these reads pointing at a different submission (or at null).
+        const folderId = latestSubmission._id;
+        const stages = submissionStages;
 
+        try {
             // Fetch performance metrics for each stage
             const metricsPromises = stages.map(
-                async (stage: any, index: number) => {
+                async (stage: WorkflowStage, index: number) => {
                     const stageNumber = index + 1;
                     const metrics = await fetchPerformanceMetrics(
-                        latestSubmission._id,
+                        folderId,
                         stageNumber,
                     );
 
@@ -736,7 +747,7 @@
             performanceMetrics = results.filter((m) => m !== null) as Array<{
                 stageNumber: number;
                 stageName: string;
-                data: any;
+                data: PerformanceMetrics;
             }>;
         } catch (error) {
             console.error("Error loading performance metrics:", error);
@@ -745,7 +756,8 @@
         }
     }
 
-    function formatBytes(bytes: number): string {
+    function formatBytes(bytes: number | undefined): string {
+        if (bytes === undefined || Number.isNaN(bytes)) return "N/A";
         if (bytes === 0) return "0 B";
         const k = 1024;
         const sizes = ["B", "KB", "MB", "GB"];
@@ -755,9 +767,14 @@
         );
     }
 
-    function formatDuration(startedAt: string, finishedAt: string): string {
-        const start = new Date(startedAt);
-        const finish = new Date(finishedAt);
+    function formatDuration(
+        startedAt: string | undefined,
+        finishedAt: string | undefined,
+    ): string {
+        // ?? "" rather than a guard: an absent timestamp yields an Invalid
+        // Date, which the isNaN check below already reports as N/A.
+        const start = new Date(startedAt ?? "");
+        const finish = new Date(finishedAt ?? "");
 
         if (isNaN(start.getTime()) || isNaN(finish.getTime())) {
             return "N/A";

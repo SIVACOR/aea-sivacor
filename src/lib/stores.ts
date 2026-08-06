@@ -1,10 +1,18 @@
 import { writable, derived } from 'svelte/store';
 
-interface User {
+/**
+ * A Girder user. The named fields are the ones this app reads; the index
+ * signature keeps the rest of Girder's document accessible without pretending
+ * we know its type. Exported so api.ts shares this definition rather than
+ * keeping a second copy in sync.
+ */
+export interface User {
     _id: string;
     login: string;
     email: string;
-    [key: string]: any;
+    firstName?: string;
+    lastName?: string;
+    [key: string]: unknown;
 }
 
 // Represents the user object (or null if unauthenticated)

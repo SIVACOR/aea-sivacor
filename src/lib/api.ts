@@ -1,29 +1,22 @@
 import { get } from 'svelte/store';
-import { user } from './stores';
+import { user, type User } from './stores';
 import Cookies from 'js-cookie';
 import { env } from '$env/dynamic/public';
 
 // Type definitions
-interface OAuthProvider {
+export interface OAuthProvider {
     id: string;
     name: string;
     url: string;
 }
 
-interface User {
-    _id: string;
-    login: string;
-    email: string;
-    [key: string]: any;
-}
-
-interface Folder {
+export interface Folder {
     _id: string;
     name: string;
     baseParentType: string;
     baseParentId: string;
-    meta?: Record<string, any>;
-    [key: string]: any;
+    meta?: Record<string, unknown>;
+    [key: string]: unknown;
 }
 
 /**
@@ -39,13 +32,39 @@ export interface ApiError extends Error {
     };
 }
 
-interface JobDetails {
+export interface JobDetails {
     _id: string;
     status: number;
     created: string;
+    updated?: string;
     log?: string[];
     resultPath?: string;
-    [key: string]: any;
+    /** Girder's failure detail, present once status is ERROR. */
+    error?: string;
+    [key: string]: unknown;
+}
+
+/**
+ * The `performance_data_stage_N.json` a run leaves in its submission folder.
+ * Every field is optional: the file is assembled from Docker stats, and a run
+ * that died early can be missing any of them.
+ */
+export interface UploadedFile {
+    _id: string;
+    /** Set on the response to the final chunk, once the item exists. */
+    itemId?: string;
+    [key: string]: unknown;
+}
+
+export interface PerformanceMetrics {
+    StartedAt?: string;
+    FinishedAt?: string;
+    MaxCPUPercent?: number;
+    MaxMemoryUsage?: number;
+    NCPU?: number;
+    MemTotal?: number;
+    OperatingSystem?: string;
+    [key: string]: unknown;
 }
 
 interface JobStageConfig {
@@ -97,7 +116,7 @@ export async function fetchOAuthProviders(redirectUrl: string): Promise<OAuthPro
     const endpoint = `/oauth/provider?redirect=${encodedRedirect}&list=true`;
 
     // Use the existing api function for the GET request
-    const providers = await api(endpoint);
+    const providers = await api<OAuthProvider[]>(endpoint);
 
     if (!Array.isArray(providers) || providers.length === 0) {
         throw new Error('No OAuth providers found.');
@@ -118,7 +137,7 @@ export async function getUploadsFolder() {
         throw new Error('User not logged in or user ID not available.');
     }
     const endpoint = `/folder?parentType=user&parentId=${user._id}&name=Uploads&limit=1`;
-    const folder = await api(endpoint);
+    const folder = await api<Folder[]>(endpoint);
     if (!Array.isArray(folder) || folder.length !== 1) {
         throw new Error('Uploads folder not found for the current user.');
     }
@@ -126,7 +145,7 @@ export async function getUploadsFolder() {
 }
 
 async function getSubmissionsCollectionId(): Promise<string | null> {
-    const collections = await api('/collection?name=Submissions');
+    const collections = await api<Folder[]>('/collection?name=Submissions');
     if (!Array.isArray(collections) || collections.length !== 1) {
         return null;
         //throw new Error('Could not find Submissions collection.');
@@ -149,7 +168,7 @@ async function getSubmissionsCollectionId(): Promise<string | null> {
  */
 export async function getLatestSubmissionJob(): Promise<JobDetails | null> {
     const types = encodeURIComponent(JSON.stringify(['sivacor_submission']));
-    const jobs = await api(`/job?types=${types}&limit=1&sort=created&sortdir=-1`);
+    const jobs = await api<JobDetails[]>(`/job?types=${types}&limit=1&sort=created&sortdir=-1`);
     if (!Array.isArray(jobs) || jobs.length === 0) {
         return null;
     }
@@ -170,7 +189,7 @@ export async function getSubmissionByJobId(jobId: string): Promise<Folder | null
     }
     // `jobId` is a SIVACOR-specific filter on Girder's folder listing; it
     // requires parentType/parentId to be given alongside it.
-    const submissions = await api(
+    const submissions = await api<Folder[]>(
         `/folder?parentType=collection&parentId=${collectionId}&jobId=${encodeURIComponent(jobId)}`
     );
     if (!Array.isArray(submissions) || submissions.length === 0) {
@@ -193,18 +212,18 @@ export async function getSubmissionByIdOrName(idOrName: string): Promise<Folder 
 
     // Try to fetch by ID first (assuming it's a folder ID)
     try {
-        const folder = await api(`/folder/${idOrName}`);
+        const folder = await api<Folder>(`/folder/${idOrName}`);
         // Verify it's actually in the Submissions collection
         if (folder && folder.baseParentType === 'collection' && folder.baseParentId === collectionId) {
             return folder;
         }
-    } catch (error) {
+    } catch {
         // If fetching by ID fails, continue to try by name
         console.log('Not a valid folder ID, trying by name...');
     }
 
     // Try to fetch by name
-    const submissions = await api(`/folder?parentType=collection&parentId=${collectionId}&name=${encodeURIComponent(idOrName)}&limit=1`);
+    const submissions = await api<Folder[]>(`/folder?parentType=collection&parentId=${collectionId}&name=${encodeURIComponent(idOrName)}&limit=1`);
     if (Array.isArray(submissions) && submissions.length > 0) {
         return submissions[0];
     }
@@ -289,11 +308,17 @@ export function getImageTagsUrl(): string {
 
 /**
  * Generic function to make an authenticated API call.
+ *
+ * The response shape is whatever the caller declares: `api<Folder[]>(...)`.
+ * There is no runtime check, so the type parameter is a claim about the
+ * endpoint, not a guarantee -- but it keeps that claim in one visible place
+ * instead of spreading `any` through every caller.
+ *
  * @param {string} endpoint - The API path (e.g., '/user/me').
  * @param {object} options - Fetch options.
- * @returns {Promise<any>} The parsed JSON response.
+ * @returns {Promise<T>} The parsed JSON response.
  */
-export async function api(endpoint: string, options: RequestInit = {}): Promise<any> {
+export async function api<T = unknown>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = getGirderToken();
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -309,7 +334,7 @@ export async function api(endpoint: string, options: RequestInit = {}): Promise<
         headers
     });
 
-    if (res.status === 204) return null; // Handle No Content
+    if (res.status === 204) return null as T; // Handle No Content
 
     // Check for errors and try to extract detailed error information
     if (!res.ok && res.status !== 401) { // 401 is handled by checkAuth()
@@ -343,7 +368,10 @@ export async function api(endpoint: string, options: RequestInit = {}): Promise<
     if (contentType && contentType.includes('application/json')) {
         return res.json();
     }
-    return res; // Return response object for non-json responses (like logout)
+    // Non-JSON responses (logout, for one) hand back the raw Response. No
+    // caller reads it today, so the cast documents the quirk rather than
+    // forcing every call site to allow for it.
+    return res as unknown as T;
 }
 
 
@@ -352,7 +380,7 @@ export async function api(endpoint: string, options: RequestInit = {}): Promise<
  */
 export async function checkAuthentication() {
     try {
-        const userData = await api('/user/me');
+        const userData = await api<User | null>('/user/me');
         user.set(userData); // Will be null or the user object
     } catch (error) {
         console.error('Authentication check failed:', error);
@@ -382,7 +410,7 @@ export async function updateUserEmail(newEmail: string): Promise<User> {
     });
 
     const endpoint = `/user/${currentUser._id}?${query.toString()}`;
-    const response = await api(endpoint, {
+    const response = await api<User>(endpoint, {
         method: 'PUT',
     });
 
@@ -418,7 +446,7 @@ export async function logout() {
  * @param {File} file - The file object to upload.
  * @returns {Promise<{id: string, name: string}>} The upload object with ID.
  */
-export async function initiateFileUpload(file: File): Promise<{ id: string; name: string }> {
+export async function initiateFileUpload(file: File): Promise<{ id?: string; _id?: string; name: string }> {
     const parentId = await getUploadsFolder(); // Ensure we get the correct Uploads folder ID
     const query = new URLSearchParams({
         parentType: 'folder',
@@ -429,16 +457,16 @@ export async function initiateFileUpload(file: File): Promise<{ id: string; name
     });
 
     // Use the existing api function for the POST request
-    const response = await api(`/file?${query.toString()}`, {
+    const response = await api<{ id?: string; _id?: string; name: string }>(`/file?${query.toString()}`, {
         method: 'POST'
     });
 
     return response;
 }
 
-export async function getImages(): Promise<any> {
+export async function getImages(): Promise<Record<string, string[]>> {
     const endpoint = '/sivacor/image_tags';
-    const response = await api(endpoint);
+    const response = await api<Record<string, string[]>>(endpoint);
     return response;
 }
 
@@ -449,7 +477,7 @@ export async function getImages(): Promise<any> {
  * @returns {Promise<Record<string, any>>} The workflow JSON schema.
  */
 export async function getWorkflowSchema(): Promise<Record<string, unknown>> {
-    return await api('/sivacor/workflow_schema');
+    return await api<Record<string, unknown>>('/sivacor/workflow_schema');
 }
 
 /**
@@ -458,8 +486,8 @@ export async function getWorkflowSchema(): Promise<Record<string, unknown>> {
  * `sivacor.banner_message`). Works without a valid auth token.
  * @returns {Promise<Record<string, any>>} The public settings map.
  */
-export async function getPublicSettings(): Promise<Record<string, any>> {
-    return await api('/system/public_settings');
+export async function getPublicSettings(): Promise<Record<string, unknown>> {
+    return await api<Record<string, unknown>>('/system/public_settings');
 }
 
 /**
@@ -468,9 +496,9 @@ export async function getPublicSettings(): Promise<Record<string, any>> {
  * @param {number} offset - The starting byte offset of this chunk.
  * @param {Blob} chunk - The chunk of file data.
  */
-export async function uploadFileChunk(uploadId: string, offset: number, chunk: Blob): Promise<any> {
+export async function uploadFileChunk(uploadId: string, offset: number, chunk: Blob): Promise<UploadedFile> {
     const endpoint = `/file/chunk?offset=${offset}&uploadId=${uploadId}`;
-    const response = await api(endpoint, {
+    const response = await api<UploadedFile>(endpoint, {
         method: 'POST',
         headers: {
             // Must override the default 'application/json' set in api()
@@ -558,7 +586,7 @@ export async function downloadFile(fileId: string, filename: string | null = nul
  * @param {JobStageConfig[]} config - The configuration for the job stages.
  * @returns {Promise<any>} The response object from the job creation endpoint.
  */
-export async function submitJob(fileId: string, config: JobStageConfig[], jobSecrets: Record<string, string> = {}): Promise<any> {
+export async function submitJob(fileId: string, config: JobStageConfig[], jobSecrets: Record<string, string> = {}): Promise<JobDetails> {
     const endpoint = `/sivacor/submit_job`;
 
     // translate config object to match expected API format
@@ -575,7 +603,7 @@ export async function submitJob(fileId: string, config: JobStageConfig[], jobSec
     const secretsList = Object.entries(jobSecrets).map(([key, value]) => ({ key, value }));
 
     // Send file ID as query param (non-sensitive) but stages+secrets in POST body
-    const response = await api(`${endpoint}?id=${encodeURIComponent(fileId)}`, {
+    const response = await api<JobDetails>(`${endpoint}?id=${encodeURIComponent(fileId)}`, {
         method: 'POST',
         body: JSON.stringify({ stages: transformedConfig, env_secrets: secretsList }),
     });
@@ -592,7 +620,7 @@ export async function fetchJobDetails(jobId: string): Promise<JobDetails> {
     if (!jobId) {
         throw new Error("Job ID must be provided.");
     }
-    return await api(`/job/${jobId}`);
+    return await api<JobDetails>(`/job/${jobId}`);
 }
 
 /**
@@ -600,11 +628,11 @@ export async function fetchJobDetails(jobId: string): Promise<JobDetails> {
  * @param {string} jobId - The ID of the job to cancel.
  * @returns {Promise<any>} The response object from the cancellation endpoint.
  */
-export async function cancelJob(jobId: string): Promise<any> {
+export async function cancelJob(jobId: string): Promise<JobDetails> {
     if (!jobId) {
         throw new Error("Job ID must be provided.");
     }
-    return await api(`/job/${jobId}/cancel`, {
+    return await api<JobDetails>(`/job/${jobId}/cancel`, {
         method: 'PUT'
     });
 }
@@ -615,7 +643,7 @@ export async function cancelJob(jobId: string): Promise<any> {
  * @param {number} stageNumber - The stage number (1-indexed).
  * @returns {Promise<any>} The performance metrics object.
  */
-export async function fetchPerformanceMetrics(folderId: string, stageNumber: number): Promise<any> {
+export async function fetchPerformanceMetrics(folderId: string, stageNumber: number): Promise<PerformanceMetrics | null> {
     if (!folderId) {
         throw new Error("Folder ID must be provided.");
     }
@@ -627,7 +655,7 @@ export async function fetchPerformanceMetrics(folderId: string, stageNumber: num
 
     try {
         // Get items in the folder
-        const items = await api(`/item?folderId=${folderId}&name=${encodeURIComponent(filename)}`);
+        const items = await api<Array<{ _id: string }>>(`/item?folderId=${folderId}&name=${encodeURIComponent(filename)}`);
 
         if (!Array.isArray(items) || items.length === 0) {
             return null; // Performance file doesn't exist for this stage

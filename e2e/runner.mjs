@@ -6,7 +6,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { open, resetToRunner, sleep } from './lib.mjs';
+import { open, resetToRunner, sleep, UI } from './lib.mjs';
 
 const checks = [];
 const check = (name, ok, detail) => {
@@ -121,6 +121,61 @@ check('panel stays open to show the result', await isOpen());
 await page.locator('span.import-title').click();
 await sleep(400);
 check('collapsing does not discard the import', (await page.locator('.config-row').count()) === 2);
+
+// -- environment secrets -----------------------------------------------------
+// The rows are keyed by the variable name, so committing a name re-keys the row
+// and rebuilds it. Everything downstream of that rebuild has to survive.
+// Reload first: the import above left a secret behind, and secrets are held in
+// component memory only, so a fresh page is the cheapest way back to zero rows.
+await page.goto(`${UI}/`, { waitUntil: 'networkidle', timeout: 120000 });
+await resetToRunner(page);
+await sleep(800);
+check('secrets start empty on a fresh form',
+    (await page.locator('input.secret-key-input').count()) === 0);
+
+await page.locator('button.add-secret-btn').click();
+await sleep(300);
+await page.locator('input.secret-key-input').first().click();
+await page.keyboard.type('API_TOKEN', { delay: 30 });
+const typedName = await page.locator('input.secret-key-input').first().inputValue();
+check('a secret name can be typed without losing focus', typedName === 'API_TOKEN', typedName);
+
+await page.keyboard.press('Tab'); // commit: re-keys the row
+await sleep(300);
+await page.locator('input.secret-value-input').first().fill('s3cret');
+await page.keyboard.press('Tab');
+await sleep(300);
+
+await page.locator('button.add-secret-btn').click();
+await sleep(300);
+await page.locator('input.secret-key-input').nth(1).click();
+await page.keyboard.type('SECOND_VAR', { delay: 30 });
+await page.keyboard.press('Tab');
+await sleep(300);
+await page.locator('input.secret-value-input').nth(1).fill('second-value');
+await page.keyboard.press('Tab');
+await sleep(400);
+
+const names = await page
+    .locator('input.secret-key-input')
+    .evaluateAll((els) => els.map((e) => e.value));
+const vals = await page
+    .locator('input.secret-value-input')
+    .evaluateAll((els) => els.map((e) => e.value));
+check('secret names survive the re-key',
+    JSON.stringify(names) === JSON.stringify(['API_TOKEN', 'SECOND_VAR']), JSON.stringify(names));
+check('values stay attached to their own row',
+    JSON.stringify(vals) === JSON.stringify(['s3cret', 'second-value']), JSON.stringify(vals));
+
+// Exact class: the restored step rows have remove buttons too, and a loose
+// aria-label match hits those first.
+await page.locator('button.remove-secret-btn').first().click();
+await sleep(400);
+const remaining = await page
+    .locator('input.secret-key-input')
+    .evaluateAll((els) => els.map((e) => e.value));
+check('removing a secret drops the right row',
+    JSON.stringify(remaining) === JSON.stringify(['SECOND_VAR']), JSON.stringify(remaining));
 
 await close();
 const failed = checks.filter((c) => !c.ok).length;

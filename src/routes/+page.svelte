@@ -59,7 +59,13 @@
     /**
      * Handle job state updates from JobMonitor component
      */
-    function handleJobStateUpdate(event: any) {
+    function handleJobStateUpdate(
+        event: CustomEvent<{
+            status: string;
+            isRunning: boolean;
+            hasError: boolean;
+        }>,
+    ) {
         const { status, isRunning, hasError } = event.detail;
         currentJobState = {
             status: status,
@@ -75,7 +81,7 @@
     /**
      * Handle job submission events from JobRunner/JobMonitor
      */
-    function handleJobSubmitted(event: any) {
+    function handleJobSubmitted(event: CustomEvent<{ status?: string }>) {
         const { status } = event.detail;
         isJobRunning = true;
         jobStatusText = status || "Submission in Progress";
@@ -84,7 +90,7 @@
     /**
      * Handle title updates from LoginForm component
      */
-    function handleLoginTitleUpdate(event: any) {
+    function handleLoginTitleUpdate(event: CustomEvent<{ title: string }>) {
         const { title } = event.detail;
         console.log("LoginForm title update:", title);
         // The LoginForm can override the reactive title temporarily
@@ -115,7 +121,7 @@
     function sendSupportEmail() {
         const subject = encodeURIComponent("SIVACOR Support Request");
         const body = encodeURIComponent(
-            `Hello SIVACOR Support Team,\n\nI have a question/need assistance with the SIVACOR application.\n\nUser: ${$user ? `${($user as any).firstName} ${($user as any).lastName}` : "Anonymous"}\n\nDescription of my question/issue:\n[Please describe your question or issue here]\n\nThank you for your assistance,`,
+            `Hello SIVACOR Support Team,\n\nI have a question/need assistance with the SIVACOR application.\n\nUser: ${$user ? `${$user.firstName} ${$user.lastName}` : "Anonymous"}\n\nDescription of my question/issue:\n[Please describe your question or issue here]\n\nThank you for your assistance,`,
         );
         window.location.href = `mailto:support@sivacor.org?subject=${subject}&body=${body}`;
     }
@@ -182,8 +188,8 @@
                             >account_circle</span
                         >
                         <span class="user-name"
-                            >Hello, {($user as any)?.firstName}
-                            {($user as any)?.lastName}</span
+                            >Hello, {$user?.firstName}
+                            {$user?.lastName}</span
                         >
                     </div>
                     <button

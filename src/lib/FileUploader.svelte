@@ -1,6 +1,11 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import { deleteItem, initiateFileUpload, uploadFileChunk } from "./api";
+    import {
+        deleteItem,
+        initiateFileUpload,
+        uploadFileChunk,
+        type UploadedFile,
+    } from "./api";
 
     const UPLOAD_CHUNK_SIZE = 1024 * 1024 * 5;
 
@@ -139,7 +144,13 @@
         try {
             // Step 1: Initiate the upload
             const uploadResponse = await initiateFileUpload(selectedFile);
-            const uploadId = uploadResponse.id || (uploadResponse as any)._id;
+            // Girder answers with _id; older paths used id. Either is fine.
+            const uploadId = uploadResponse.id || uploadResponse._id;
+            if (!uploadId) {
+                throw new Error(
+                    "The server did not return an upload id, so the file cannot be sent.",
+                );
+            }
             const totalSize = selectedFile.size;
             const totalSizeMB = Math.round(totalSize / (1024 * 1024));
 
@@ -147,7 +158,7 @@
             let uploadedBytes = 0;
 
             // Step 2: Upload chunks
-            let lastChunk = null;
+            let lastChunk: UploadedFile | null = null;
             while (offset < totalSize) {
                 const chunk = selectedFile.slice(
                     offset,
@@ -164,11 +175,20 @@
                 offset += UPLOAD_CHUNK_SIZE;
             }
 
+            // A zero-byte file never enters the loop above, so there is no
+            // final chunk to take the file id from -- and dispatching an
+            // undefined one would fail later, at submit, with a confusing error.
+            if (!lastChunk) {
+                throw new Error(
+                    "The selected file is empty, so nothing was uploaded.",
+                );
+            }
+
             // Upload complete, final progress to 100%
             uploadProgress = 100;
             uploadStatus = "Upload complete!";
             console.log("File upload completed successfully:", lastChunk);
-            uploadedItemId = lastChunk.itemId;
+            uploadedItemId = lastChunk.itemId ?? null;
             dispatch("uploadcomplete", {
                 fileId: lastChunk._id, // This is the ID the JobRunner needs
             });

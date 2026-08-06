@@ -3,7 +3,7 @@
     import { page } from "$app/stores";
     import { goto } from "$app/navigation";
     import { browser } from "$app/environment";
-    import { fetchOAuthProviders } from "./api";
+    import { fetchOAuthProviders, type OAuthProvider } from "./api";
     import { createEventDispatcher } from "svelte";
 
     const dispatch = createEventDispatcher();
@@ -16,7 +16,7 @@
      */
 
     /** @type {OAuthProvider[] | null} */
-    let providers: any[] | null = null;
+    let providers: OAuthProvider[] | null = null;
     let loading = true;
     let error: string | null = null;
     let oauthErrorMessage: string | null = null;
