@@ -10,7 +10,7 @@
                 Back to SIVACOR
             </a>
             <h1>Privacy Policy</h1>
-            <p class="last-updated">Last updated: 31 March 2026</p>
+            <p class="last-updated">Last updated: 6 August 2026</p>
         </header>
 
         <section>
@@ -65,12 +65,12 @@
                     <tr>
                         <td>Uploaded research archive files</td>
                         <td>Uploaded by you when submitting a job</td>
-                        <td>Girder backend (retained for 30d)</td>
+                        <td>Girder backend (retained for 14 days)</td>
                     </tr>
                     <tr>
                         <td>Job results and output artefacts</td>
                         <td>Produced by the SIVACOR pipeline</td>
-                        <td>Girder backend (retained for 30d)</td>
+                        <td>Girder backend (retained for 14 days)</td>
                     </tr>
                     <tr>
                         <td
@@ -102,6 +102,15 @@
                     technical problems. These interests are not overridden by your
                     rights given the limited scope of the data collected.
                 </li>
+                <li>
+                    <strong>Legitimate interests (Article 6(1)(f)):</strong> When
+                    a job finishes we derive an anonymous statistical record of
+                    how it ran (see section 7). We need this to diagnose recurring
+                    failures and to report on the service to its funders. The
+                    processing consists of reducing your job to figures that
+                    identify no one, and the result cannot be traced back to you,
+                    so the impact on your rights is minimal.
+                </li>
             </ul>
         </section>
 
@@ -122,6 +131,11 @@
                 <li>
                     To detect and investigate security incidents via server
                     logs.
+                </li>
+                <li>
+                    To compile anonymous statistics on how the service performs
+                    — how often jobs succeed or fail and why — for debugging and
+                    for reporting to the project's funders. See section 7.
                 </li>
             </ul>
         </section>
@@ -154,10 +168,13 @@
                 </li>
             </ul>
             <p>
-                No tracking, analytics, or advertising third parties receive
-                your data. Since Step 1 of our GDPR implementation, fonts and
-                icons are served directly from this application — no external
-                font CDN requests are made.
+                No third-party tracking, analytics, or advertising service
+                receives your data. The anonymous operational statistics
+                described in section 7 are produced and held by us alone and are
+                not shared with any third party in a form that identifies you.
+                Since Step 1 of our GDPR implementation, fonts and icons are
+                served directly from this application — no external font CDN
+                requests are made.
             </p>
         </section>
 
@@ -166,8 +183,11 @@
             <ul>
                 <li>
                     <strong>Uploaded archives and job output files:</strong> Retained
-                    on the server for a limited period after job completion to allow
-                    you to retrieve results. You can delete your own submissions
+                    for <strong>14 days from the time you submit the job</strong>,
+                    so that you can retrieve your results, and deleted automatically
+                    after that. Note that the period runs from submission, not from
+                    completion — a job that takes two days to run leaves you twelve
+                    days to download its output. You can delete your own submissions
                     at any time using the delete button in the job list. Contact
                     us if you need data removed sooner.
                 </li>
@@ -194,11 +214,63 @@
                     the standard operational policy of the hosting infrastructure,
                     typically no longer than 90 days.
                 </li>
+                <li>
+                    <strong>Anonymous operational records:</strong> Kept
+                    indefinitely. These contain no personal data — see section 7.
+                </li>
             </ul>
         </section>
 
         <section>
-            <h2>7. Cookies and Browser Storage</h2>
+            <h2>7. Anonymous Operational Records</h2>
+            <p>
+                Everything above is deleted on the schedule described in section
+                6. That would leave us unable to answer basic questions about
+                the service — how often runs fail, on which analysis
+                environments, and why — so when a job reaches its final state we
+                also write a small statistical record of how it ran, and keep
+                that indefinitely.
+            </p>
+            <p>These records contain only:</p>
+            <ul>
+                <li>the date (not the time) the job finished;</li>
+                <li>
+                    whether it succeeded, failed, or was abandoned, and for
+                    failures a category such as <em>out of disk space</em> or
+                    <em>the analysis exited with an error</em>;
+                </li>
+                <li>
+                    which analysis environment was used (for example
+                    <code>rocker/r-ver:4.6.1</code>), how long the run took, and
+                    how much processor and memory it used;
+                </li>
+                <li>
+                    the size of the uploaded package as a broad range (for
+                    example <em>10–100&nbsp;MB</em>), never an exact size;
+                </li>
+                <li>the processor architecture and core count of the machine that ran it.</li>
+            </ul>
+            <p>
+                They deliberately contain <strong>no identifier of any kind</strong>:
+                no user, account, job or submission reference, no name, no email
+                address, no ORCID iD, and no filename, file path, or content
+                from your uploaded package. There is no key that would let us —
+                or anyone else — link a record back to you or to a particular
+                submission. Error messages are reduced to a fixed list of
+                categories before being stored, precisely so that text taken
+                from your own files cannot end up in them.
+            </p>
+            <p>
+                Because these records are anonymous, they are not personal data
+                and the rights in section 9 do not apply to them: there is
+                nothing in them to give you a copy of, correct, or delete. Your
+                submission and everything identifying it are still deleted in
+                full, on request or on the 14-day schedule.
+            </p>
+        </section>
+
+        <section>
+            <h2>8. Cookies and Browser Storage</h2>
             <p>
                 SIVACOR uses only functional storage — no tracking or
                 advertising cookies:
@@ -233,7 +305,7 @@
         </section>
 
         <section>
-            <h2>8. Your Rights Under GDPR</h2>
+            <h2>9. Your Rights Under GDPR</h2>
             <p>
                 As a data subject you have the following rights, exercisable
                 free of charge:
@@ -276,7 +348,7 @@
         </section>
 
         <section>
-            <h2>9. Changes to This Policy</h2>
+            <h2>10. Changes to This Policy</h2>
             <p>
                 We may update this policy from time to time. Material changes
                 will be announced via a banner on the application. The "Last
