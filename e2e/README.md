@@ -25,8 +25,11 @@ Everything here is plain ESM run directly with `node`. No test framework.
 ## Run
 
 ```bash
-node e2e/monitor.mjs          # JobMonitor lifecycle checks; exits non-zero on failure
+node e2e/monitor.mjs          # JobMonitor lifecycle: polling, refresh recovery, job identity
+node e2e/runner.mjs           # JobRunner form: workflow-import panel, drop-zone hit areas
 ```
+
+Both exit non-zero on failure.
 
 To A/B a suspected regression:
 

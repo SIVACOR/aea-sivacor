@@ -28,6 +28,8 @@
 
     let isParsing = false;
     let isDragging = false;
+    /** Mirrors the <details> open state; drives the chevron only. */
+    let isExpanded = false;
     let importMessage: string | null = null;
     /** Schema violations etc., listed in full rather than first-error-only. */
     let importErrors: string[] = [];
@@ -260,119 +262,161 @@
     }
 </script>
 
-<div class="import-section">
-    <div class="import-header">
+<!-- Collapsed by default (#37): most submissions are a single step filled in by
+     hand, and an expanded import panel above the form reads as a required first
+     step. Native <details> rather than a bound flag so the disclosure keeps its
+     keyboard and screen-reader behaviour for free. -->
+<details class="import-section" bind:open={isExpanded}>
+    <summary class="import-header">
         <span class="material-icons import-icon" aria-hidden="true">
             upload_file
         </span>
-        <span class="import-title">Import workflow definition</span>
+        <span class="import-title">Optional: Import workflow definition</span>
         <span class="import-hint">
-            Optional: fill the steps and secrets below from a file
+            Configure multiple steps based on a file
         </span>
-    </div>
+        <span class="material-icons import-chevron" aria-hidden="true">
+            {isExpanded ? "expand_less" : "expand_more"}
+        </span>
+    </summary>
 
-    <div
-        class="import-area"
-        class:disabled={disabled || isParsing}
-        class:is-dragging={isDragging}
-        on:dragover={handleDragOver}
-        on:dragenter={handleDragOver}
-        on:dragleave={handleDragLeave}
-        on:drop={handleDrop}
-        role="region"
-        aria-label="Workflow definition drop zone"
-        aria-describedby="workflow-import-instructions"
-    >
-        <label for="workflow-import-input" class="import-input-label">
-            <span class="material-icons import-file-icon" aria-hidden="true">
-                description
-            </span>
-            <div class="import-input-text">
-                <strong>Choose a workflow file</strong> or drag it here
-                <small id="workflow-import-instructions">
-                    Supported formats: YAML, JSON ({ALLOWED_EXTENSIONS.join(
-                        ", ",
-                    )}) • Max size: {MAX_FILE_SIZE / 1024} KB
-                </small>
+    <!-- Wrapper rather than laying the panel out on <details> itself: a
+         flex/grid display on the element breaks the collapsed state in some
+         browsers. -->
+    <div class="import-body">
+        <div
+            class="import-area"
+            class:disabled={disabled || isParsing}
+            class:is-dragging={isDragging}
+            on:dragover={handleDragOver}
+            on:dragenter={handleDragOver}
+            on:dragleave={handleDragLeave}
+            on:drop={handleDrop}
+            role="region"
+            aria-label="Workflow definition drop zone"
+            aria-describedby="workflow-import-instructions"
+        >
+            <label for="workflow-import-input" class="import-input-label">
+                <span class="material-icons import-file-icon" aria-hidden="true">
+                    description
+                </span>
+                <div class="import-input-text">
+                    <strong>Choose a workflow file</strong> or drag it here
+                    <small id="workflow-import-instructions">
+                        Supported formats: YAML, JSON ({ALLOWED_EXTENSIONS.join(
+                            ", ",
+                        )}) • Max size: {MAX_FILE_SIZE / 1024} KB
+                    </small>
+                </div>
+            </label>
+            <input
+                type="file"
+                id="workflow-import-input"
+                class="import-input"
+                on:change={handleFileSelect}
+                disabled={disabled || isParsing}
+                accept=".yaml,.yml,.json,application/json,application/yaml,text/yaml"
+                aria-label="Choose a workflow definition file to import"
+            />
+        </div>
+        <!-- Live region to announce drag state changes to assistive technologies -->
+        <div class="sr-only" aria-live="polite" aria-atomic="true">
+            {isDragging ? "File detected. Release to import." : ""}
+        </div>
+
+        <details class="import-example">
+            <summary>Expected format</summary>
+            <pre>{`stages:
+      - image_name: ${Object.keys(imagesData)[0] ?? "some/image"}
+        image_tag: "${imagesData[Object.keys(imagesData)[0]]?.[0] ?? "latest"}"
+        main_file: main.do
+        network_isolation: true
+    env_secrets:
+      - key: API_TOKEN
+        value: s3cret`}</pre>
+            <p>
+                <code>network_isolation</code> and <code>env_secrets</code> are
+                optional. Secrets are read from the file into this form only — like
+                secrets typed by hand, they are never saved in your browser.
+            </p>
+        </details>
+
+        {#if isParsing}
+            <div class="import-status" role="status">
+                <div class="md-spinner"></div>
+                <span>Validating workflow definition…</span>
             </div>
-        </label>
-        <input
-            type="file"
-            id="workflow-import-input"
-            class="import-input"
-            on:change={handleFileSelect}
-            disabled={disabled || isParsing}
-            accept=".yaml,.yml,.json,application/json,application/yaml,text/yaml"
-            aria-label="Choose a workflow definition file to import"
-        />
-    </div>
-    <!-- Live region to announce drag state changes to assistive technologies -->
-    <div class="sr-only" aria-live="polite" aria-atomic="true">
-        {isDragging ? "File detected. Release to import." : ""}
-    </div>
-
-    <details class="import-example">
-        <summary>Expected format</summary>
-        <pre>{`stages:
-  - image_name: ${Object.keys(imagesData)[0] ?? "some/image"}
-    image_tag: "${imagesData[Object.keys(imagesData)[0]]?.[0] ?? "latest"}"
-    main_file: main.do
-    network_isolation: true
-env_secrets:
-  - key: API_TOKEN
-    value: s3cret`}</pre>
-        <p>
-            <code>network_isolation</code> and <code>env_secrets</code> are
-            optional. Secrets are read from the file into this form only — like
-            secrets typed by hand, they are never saved in your browser.
-        </p>
-    </details>
-
-    {#if isParsing}
-        <div class="import-status" role="status">
-            <div class="md-spinner"></div>
-            <span>Validating workflow definition…</span>
-        </div>
-    {:else if importMessage}
-        <div class="import-status success" role="status">
-            <span class="material-icons" aria-hidden="true">check_circle</span>
-            <span>{importMessage}</span>
-        </div>
-    {:else if importErrors.length > 0}
-        <div class="import-status error" role="alert">
-            <span class="material-icons" aria-hidden="true">error</span>
-            <div class="error-body">
-                <strong>The workflow definition could not be imported:</strong>
-                <ul>
-                    <!-- Keyed by index: two stages can fail the same way, so
-                         the message itself is not unique. -->
-                    {#each importErrors as problem, index (index)}
-                        <li>{problem}</li>
-                    {/each}
-                </ul>
+        {:else if importMessage}
+            <div class="import-status success" role="status">
+                <span class="material-icons" aria-hidden="true">check_circle</span>
+                <span>{importMessage}</span>
             </div>
-        </div>
-    {/if}
-</div>
+        {:else if importErrors.length > 0}
+            <div class="import-status error" role="alert">
+                <span class="material-icons" aria-hidden="true">error</span>
+                <div class="error-body">
+                    <strong>The workflow definition could not be imported:</strong>
+                    <ul>
+                        <!-- Keyed by index: two stages can fail the same way, so
+                             the message itself is not unique. -->
+                        {#each importErrors as problem, index (index)}
+                            <li>{problem}</li>
+                        {/each}
+                    </ul>
+                </div>
+            </div>
+        {/if}
+    </div>
+</details>
 
 <style>
     /* Solid, like .config-row in JobRunner: the dashed border belongs to the
        drop zone inside, and nesting two of them reads as a mistake. */
     .import-section {
-        display: flex;
-        flex-direction: column;
-        gap: var(--md-spacing-sm);
         padding: var(--md-spacing-sm) var(--md-spacing-md);
         border: 1px solid var(--md-outline-variant);
         border-radius: var(--md-radius-md);
         background: var(--md-surface-container-lowest);
     }
 
+    .import-body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--md-spacing-sm);
+        margin-top: var(--md-spacing-sm);
+    }
+
+    /* The whole header is the disclosure control, per #37 ("clicking on text
+       unfolds"), so it must fill the row and carry the pointer. */
     .import-header {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
         gap: var(--md-spacing-sm);
+        cursor: pointer;
+        /* Suppress the native triangle in favour of the chevron below; Firefox
+           needs list-style, WebKit needs the pseudo-element. */
+        list-style: none;
+    }
+
+    .import-header::-webkit-details-marker {
+        display: none;
+    }
+
+    .import-header:focus-visible {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
+        border-radius: var(--md-radius-xs);
+    }
+
+    .import-header:hover .import-title {
+        color: var(--md-primary);
+    }
+
+    .import-chevron {
+        font-size: 1.25rem;
+        color: var(--md-on-surface-variant);
+        margin-left: auto;
     }
 
     .import-icon {

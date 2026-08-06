@@ -418,8 +418,14 @@
         pointer-events: none;
     }
 
+    /* top/left are load-bearing: without them the input keeps its static
+       position -- below the label -- and its 100%/100% box then hangs a full
+       drop-zone height *past* the widget, swallowing clicks meant for whatever
+       renders underneath (the workflow-import header, the first step row). */
     .file-input {
         position: absolute;
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
         opacity: 0;
