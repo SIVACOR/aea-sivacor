@@ -150,7 +150,13 @@ export async function waitTerminal(page, timeoutMs = 600000) {
 
 /** The runner form only exists once the monitor is reset (or on a fresh account). */
 export async function resetToRunner(page) {
-    const b = page.locator('button', { hasText: /run a new job|new job|new submission/i }).first();
+    // Class, not text: the same control reads "Run New Job" after a success and
+    // "Try Again" after a failure, and matching on wording silently no-ops on
+    // the error path -- leaving you on the monitor wondering where the form went.
+    let b = page.locator('button.new-job-button').first();
+    if (!(await b.count())) {
+        b = page.locator('button', { hasText: /run a new job|new job|new submission/i }).first();
+    }
     if (await b.count()) {
         await b.scrollIntoViewIfNeeded();
         await b.click();
@@ -170,6 +176,9 @@ export async function submitJob(page, opts = {}) {
         image = 'rocker/r-ver',
         tag = '4.6.1',
         mainFile = 'main.R',
+        // Leave the step fields alone -- use when an imported workflow has
+        // already filled them and overwriting would defeat the point.
+        skipForm = false,
     } = opts;
 
     await page.setInputFiles('#file-input', zip);
@@ -177,13 +186,15 @@ export async function submitJob(page, opts = {}) {
     await page.waitForFunction(() => /Upload Successful/i.test(document.body.innerText), null, {
         timeout: 180000,
     });
-    await page.selectOption('select[id^="image-select-"]', image);
-    await page.waitForTimeout(400);
-    await page.selectOption(
-        'select[id^="image-tag-"], select:not([id^="image-select-"]):not(.disabled-select)',
-        tag
-    );
-    await page.fill('input[id^="execution-file-"]', mainFile);
+    if (!skipForm) {
+        await page.selectOption('select[id^="image-select-"]', image);
+        await page.waitForTimeout(400);
+        await page.selectOption(
+            'select[id^="image-tag-"], select:not([id^="image-select-"]):not(.disabled-select)',
+            tag
+        );
+        await page.fill('input[id^="execution-file-"]', mainFile);
+    }
 
     const responded = page.waitForResponse(
         (r) => r.url().includes('/sivacor/submit_job') && r.request().method() === 'POST',

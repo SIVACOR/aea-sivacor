@@ -326,14 +326,17 @@
 
         <details class="import-example">
             <summary>Expected format</summary>
+            <!-- Indentation here is the rendered output, not source layout:
+                 `env_secrets` is a peer of `stages`, so both must sit at
+                 column 0 however this block is nested in the markup. -->
             <pre>{`stages:
-      - image_name: ${Object.keys(imagesData)[0] ?? "some/image"}
-        image_tag: "${imagesData[Object.keys(imagesData)[0]]?.[0] ?? "latest"}"
-        main_file: main.do
-        network_isolation: true
-    env_secrets:
-      - key: API_TOKEN
-        value: s3cret`}</pre>
+  - image_name: ${Object.keys(imagesData)[0] ?? "some/image"}
+    image_tag: "${imagesData[Object.keys(imagesData)[0]]?.[0] ?? "latest"}"
+    main_file: main.do
+    network_isolation: true
+env_secrets:
+  - key: API_TOKEN
+    value: s3cret`}</pre>
             <p>
                 <code>network_isolation</code> and <code>env_secrets</code> are
                 optional. Secrets are read from the file into this form only — like

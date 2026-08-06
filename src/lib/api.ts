@@ -278,6 +278,16 @@ export function getGirderUrl(): string {
 }
 
 /**
+ * Absolute URL of the image allow-list endpoint -- the same list that fills the
+ * runner's image and tag dropdowns. Quotable in exported files as the
+ * authoritative source of valid image_name/image_tag values.
+ * @returns {string} URL of /sivacor/image_tags on this deployment.
+ */
+export function getImageTagsUrl(): string {
+    return `${BASE_URL}/sivacor/image_tags`;
+}
+
+/**
  * Generic function to make an authenticated API call.
  * @param {string} endpoint - The API path (e.g., '/user/me').
  * @param {object} options - Fetch options.

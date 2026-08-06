@@ -74,6 +74,35 @@ check('keyboard toggles the disclosure', !(await isOpen()));
 await page.keyboard.press('Enter');
 await sleep(300);
 
+// -- the "Expected format" example must itself be importable ---------------
+// It lives in a template literal, so its indentation is rendered output rather
+// than source layout -- a reformat of the surrounding markup can silently shift
+// env_secrets into looking like a member of stages. Feeding the displayed text
+// straight back through the importer is the only check that notices.
+await page.locator('details.import-example summary').click();
+await sleep(300);
+const example = await page.locator('details.import-example pre').innerText();
+console.log('--- rendered example ---\n' + example + '\n------------------------');
+const topLevelKeys = example
+    .split('\n')
+    .filter((l) => /^\S/.test(l))
+    .map((l) => l.split(':')[0]);
+check('stages and env_secrets are top-level peers',
+    topLevelKeys.includes('stages') && topLevelKeys.includes('env_secrets'),
+    JSON.stringify(topLevelKeys));
+
+const examplePath = path.join(os.tmpdir(), 'sivacor-e2e-example.yaml');
+fs.writeFileSync(examplePath, example.endsWith('\n') ? example : `${example}\n`);
+await page.setInputFiles('#workflow-import-input', examplePath);
+await page.waitForFunction(
+    () => /Imported \d+ steps?|could not be imported/.test(document.body.innerText),
+    null,
+    { timeout: 60000 }
+);
+const exampleResult = await page.evaluate(() => document.body.innerText);
+check('the example we show actually imports', /Imported \d+ steps? and 1 secret/.test(exampleResult),
+    (exampleResult.match(/Imported[^\n]*|could not be imported[\s\S]{0,200}/) || ['?'])[0].slice(0, 170));
+
 // -- importing still works -------------------------------------------------
 await page.setInputFiles('#workflow-import-input', wf);
 await page.waitForFunction(() => /Imported \d+ steps?/.test(document.body.innerText), null, {

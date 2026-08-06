@@ -9,11 +9,13 @@
         getSubmissionByJobId,
         getSubmissionByIdOrName,
         getSubmissionFolderUrl,
+        getImageTagsUrl,
         downloadFile,
         getGirderToken,
         getGirderUrl,
         fetchPerformanceMetrics,
         deleteSubmission,
+        type WorkflowStage,
     } from "./api";
     import JobRunner from "./JobRunner.svelte";
 
@@ -85,6 +87,11 @@
     // so it cannot tell us this.) Under one-VM-per-submission autoscaling this
     // wait is a cold boot -- a couple of minutes -- not an instant.
     $: isAwaitingWorker = isJobActive && !latestSubmission;
+
+    // Written by the worker alongside the run's other metadata, so it is only
+    // there once a submission folder exists.
+    $: hasWorkflowDefinition =
+        (latestSubmission?.meta?.stages?.length ?? 0) > 0;
 
     // File type mappings for downloadable files
     const FILE_TYPE_LABELS = {
@@ -300,6 +307,80 @@
         if (isLogsVisible && isJobActive && !websocket && !isConnectingToLogs) {
             connectToLogs();
         }
+    }
+
+    /**
+     * Serializes one value as a YAML scalar. JSON is a subset of YAML, so
+     * JSON.stringify quotes and escapes correctly for every scalar we emit --
+     * and it keeps `image_tag: "18"` a string, which bare 18 would not be.
+     */
+    function yamlScalar(value: unknown): string {
+        return JSON.stringify(value);
+    }
+
+    /**
+     * Renders the submission's stages as a workflow definition file, in the
+     * exact shape WorkflowImport accepts, so a finished run can be handed to
+     * someone else and re-submitted without retyping it (#38).
+     *
+     * Built by hand rather than with js-yaml because the comments are the point:
+     * they tell the recipient where the authoritative image/tag list lives.
+     * `meta.stages` carries no secrets -- those live encrypted on the job -- so
+     * there is nothing here to strip, only the placeholder to document.
+     */
+    function buildWorkflowYaml(): string {
+        const stages = latestSubmission?.meta?.stages ?? [];
+        const name = latestSubmission?.name ?? "submission";
+
+        const header = [
+            "# SIVACOR workflow definition",
+            `# Exported from submission "${name}"` +
+                (jobDetails?._id ? ` (job ${jobDetails._id})` : ""),
+            "#",
+            "# Import this file at the top of the submission form to recreate",
+            "# these steps exactly.",
+            "#",
+            "# image_name and image_tag must be copied verbatim from the list",
+            "# that fills the form's dropdowns:",
+            `#   ${getImageTagsUrl()}`,
+            "#",
+            "# Secrets are never exported. If the run needs them, add:",
+            "#   env_secrets:",
+            '#     - key: API_TOKEN',
+            '#       value: ""',
+            "",
+            "stages:",
+        ];
+
+        const body = stages.map((stage: WorkflowStage) =>
+            [
+                `  - image_name: ${yamlScalar(stage.image_name)}`,
+                `    image_tag: ${yamlScalar(stage.image_tag)}`,
+                `    main_file: ${yamlScalar(stage.main_file)}`,
+                `    network_isolation: ${stage.network_isolation === true}`,
+            ].join("\n"),
+        );
+
+        return `${header.join("\n")}\n${body.join("\n")}\n`;
+    }
+
+    /**
+     * Offers the workflow definition as a download. Generated in the browser
+     * from metadata already on screen -- there is no such file on the server.
+     */
+    function handleWorkflowDownload() {
+        const name = latestSubmission?.name ?? "submission";
+        const blob = new Blob([buildWorkflowYaml()], {
+            type: "application/yaml",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${name}-workflow.yaml`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
     }
 
     async function handleFileDownload(
@@ -1112,7 +1193,7 @@
                 {/if}
 
                 <!-- Display downloadable files if job is not actively updating -->
-                {#if !isJobActive && getDownloadableFiles().length > 0}
+                {#if !isJobActive && (getDownloadableFiles().length > 0 || hasWorkflowDefinition)}
                     <div class="files-section">
                         <div class="section-header">
                             <span class="material-icons">file_download</span>
@@ -1142,7 +1223,42 @@
                                     </button>
                                 </div>
                             {/each}
+
+                            <!-- Not a server artifact like the others: built in
+                                 the browser from the submission's stages, and
+                                 offered for failed runs too so a broken setup
+                                 can be handed on for someone else to fix. -->
+                            {#if hasWorkflowDefinition}
+                                <div class="file-card">
+                                    <div class="file-info">
+                                        <span class="material-icons file-icon"
+                                            >tune</span
+                                        >
+                                        <span class="file-label"
+                                            >Workflow definition</span
+                                        >
+                                    </div>
+                                    <button
+                                        class="download-button"
+                                        type="button"
+                                        on:click={handleWorkflowDownload}
+                                    >
+                                        <span class="material-icons"
+                                            >download</span
+                                        >
+                                        Download
+                                    </button>
+                                </div>
+                            {/if}
                         </div>
+                        {#if hasWorkflowDefinition}
+                            <p class="files-note">
+                                The workflow definition re-creates this run's
+                                steps in the submission form — hand it to a
+                                colleague instead of dictating image names and
+                                tags.
+                            </p>
+                        {/if}
                     </div>
                 {/if}
 
@@ -1876,6 +1992,13 @@
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         gap: var(--md-spacing-md);
+    }
+
+    .files-note {
+        margin-top: var(--md-spacing-sm);
+        color: var(--md-on-surface-variant);
+        font-size: var(--md-font-caption);
+        line-height: 1.4;
     }
 
     .file-card {

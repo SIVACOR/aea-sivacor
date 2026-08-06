@@ -27,6 +27,7 @@ Everything here is plain ESM run directly with `node`. No test framework.
 ```bash
 node e2e/monitor.mjs          # JobMonitor lifecycle: polling, refresh recovery, job identity
 node e2e/runner.mjs           # JobRunner form: workflow-import panel, drop-zone hit areas
+node e2e/workflow-export.mjs  # export a run's workflow definition and re-import it
 ```
 
 Both exit non-zero on failure.
