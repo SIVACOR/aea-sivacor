@@ -511,73 +511,30 @@ export async function uploadFileChunk(uploadId: string, offset: number, chunk: B
 }
 
 /**
- * Downloads a file by ID using blob to prevent opening new windows.
- * Ensures all authentication headers are passed properly.
+ * Builds a directly-linkable download URL for a file.
+ *
+ * Deliberately a plain URL rather than a fetch: handing the browser the link
+ * lets it stream the file straight to disk, show it in its own download UI the
+ * moment the request starts, and offer cancel/resume. Fetching into a Blob
+ * instead buffers the whole replication package in the tab and leaves the user
+ * staring at a dead button until it finishes.
+ *
+ * Auth travels as `?token=` because a link carries no headers. Girder reads
+ * that parameter (its cookie fallback is no use here -- ours is set on the app's
+ * origin, not the API's), and /file/:id/download is one of the endpoints
+ * explicitly marked as safe to authenticate this way.
+ *
  * @param {string} fileId - The ID of the file to download.
- * @param {string|null} filename - Optional filename for the download. If not provided, will use the fileId.
- * @returns {Promise<void>} Resolves when download is initiated.
+ * @returns {string} An absolute URL that downloads the file when navigated to.
  */
-export async function downloadFile(fileId: string, filename: string | null = null): Promise<void> {
+export function getFileDownloadUrl(fileId: string): string {
     if (!fileId) {
         throw new Error("File ID must be provided.");
     }
 
+    const url = `${BASE_URL}/file/${fileId}/download`;
     const token = getGirderToken();
-    const headers: Record<string, string> = {};
-
-    if (token) {
-        headers['Girder-Token'] = token;
-    }
-
-    try {
-        const response = await fetch(`${BASE_URL}/file/${fileId}/download`, {
-            method: 'GET',
-            headers: headers
-        });
-
-        if (!response.ok) {
-            throw new Error(`Download failed: ${response.statusText}`);
-        }
-
-        // Get the blob from the response
-        const blob = await response.blob();
-
-        // Try to get filename from Content-Disposition header if not provided
-        let downloadFilename = filename;
-        if (!downloadFilename) {
-            const contentDisposition = response.headers.get('Content-Disposition');
-            if (contentDisposition && contentDisposition.includes('filename=')) {
-                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-                if (filenameMatch && filenameMatch[1]) {
-                    downloadFilename = filenameMatch[1].replace(/['"]/g, '');
-                }
-            }
-
-            // Fallback to fileId if no filename found
-            if (!downloadFilename) {
-                downloadFilename = fileId;
-            }
-        }
-
-        // Create blob URL and trigger download
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = downloadFilename;
-
-        // Append to body, click, and remove
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        // Clean up the blob URL
-        window.URL.revokeObjectURL(url);
-
-    } catch (error) {
-        console.error('File download failed:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        throw new Error(`Failed to download file: ${errorMessage}`);
-    }
+    return token ? `${url}?token=${encodeURIComponent(token)}` : url;
 }
 
 /**

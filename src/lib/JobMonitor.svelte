@@ -10,7 +10,7 @@
         getSubmissionByIdOrName,
         getSubmissionFolderUrl,
         getImageTagsUrl,
-        downloadFile,
+        getFileDownloadUrl,
         getGirderToken,
         getGirderUrl,
         fetchPerformanceMetrics,
@@ -388,20 +388,6 @@
         link.click();
         link.remove();
         URL.revokeObjectURL(url);
-    }
-
-    async function handleFileDownload(
-        fileId: string,
-        filename: string | undefined = undefined,
-    ) {
-        try {
-            await downloadFile(fileId, filename);
-        } catch (error) {
-            console.error("Download failed:", error);
-            alert(
-                `Download failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-            );
-        }
     }
 
     async function checkJobStatus(jobId: string) {
@@ -1227,17 +1213,24 @@
                                             >{file.label}</span
                                         >
                                     </div>
-                                    <button
+                                    <!-- A real link, not a fetch: the browser
+                                         then shows its own download progress
+                                         from the first byte and streams to disk
+                                         instead of buffering the whole package
+                                         in the tab. No target=_blank -- Girder
+                                         answers with Content-Disposition:
+                                         attachment, so the page never navigates
+                                         and a new tab would just be left behind
+                                         empty. -->
+                                    <a
                                         class="download-button"
-                                        type="button"
-                                        on:click={() =>
-                                            handleFileDownload(file.id)}
+                                        href={getFileDownloadUrl(file.id)}
                                     >
                                         <span class="material-icons"
                                             >download</span
                                         >
                                         Download
-                                    </button>
+                                    </a>
                                 </div>
                             {/each}
 
@@ -2140,26 +2133,32 @@
         font-size: var(--md-font-body2);
     }
 
+    /* An <a>, so it has to restate what the global `button` rule would have
+       given it: uppercase label, radius, min-height, no underline. */
     .download-button {
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: var(--md-spacing-xs);
+        min-height: 36px;
         padding: var(--md-spacing-sm) var(--md-spacing-md);
         background-color: var(--md-success);
         color: white;
+        font-family: var(--md-font-family);
         font-size: var(--md-font-body2);
         font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        text-decoration: none;
+        border-radius: var(--md-radius-xs);
+        cursor: pointer;
         transition: all var(--md-transition-standard);
     }
 
     .download-button:hover {
         background-color: #45a049;
         box-shadow: var(--md-elevation-1);
-    }
-
-    .download-button:disabled {
-        background-color: var(--md-outline-variant) !important;
-        color: var(--md-on-surface-variant) !important;
+        color: white;
     }
 
     .download-button:focus-visible {
