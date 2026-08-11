@@ -1,9 +1,11 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
+    import { createEventDispatcher, onMount } from "svelte";
     import {
         deleteItem,
         initiateFileUpload,
+        listPendingUploads,
         uploadFileChunk,
+        type PendingUpload,
         type UploadedFile,
     } from "./api";
 
@@ -43,7 +45,77 @@
     let uploadedItemId: string | null = null;
     let isDeletingUpload = false;
 
+    // Uploads left behind by earlier sessions -- see listPendingUploads().
+    let pendingUploads: PendingUpload[] = [];
+    let pendingBusyId: string | null = null;
+    let pendingError: string | null = null;
+
     const dispatch = createEventDispatcher();
+
+    onMount(refreshPendingUploads);
+
+    async function refreshPendingUploads() {
+        try {
+            const found = await listPendingUploads();
+            // The file uploaded in *this* session is in the Uploads folder too,
+            // but it is already wired into the form -- listing it would invite
+            // the user to "recover" the thing they are about to submit.
+            pendingUploads = found.filter(
+                (upload) => upload.itemId !== uploadedItemId,
+            );
+        } catch (error) {
+            // Recovering old uploads is ancillary; a failure here must not take
+            // down the uploader itself.
+            console.error("Could not list previous uploads:", error);
+            pendingUploads = [];
+        }
+    }
+
+    /**
+     * Adopts a leftover upload as this submission's file, so the user does not
+     * have to upload the same archive twice.
+     */
+    function usePendingUpload(upload: PendingUpload) {
+        if (!upload.fileId) return;
+        uploadedItemId = upload.itemId;
+        uploadProgress = 100;
+        uploadStatus = "Upload complete!";
+        errorMessage = null;
+        pendingError = null;
+        selectedFile = null;
+        if (fileInput) fileInput.value = "";
+        pendingUploads = pendingUploads.filter(
+            (candidate) => candidate.itemId !== upload.itemId,
+        );
+        dispatch("uploadcomplete", { fileId: upload.fileId });
+    }
+
+    async function deletePendingUpload(upload: PendingUpload) {
+        pendingBusyId = upload.itemId;
+        pendingError = null;
+        try {
+            await deleteItem(upload.itemId);
+            pendingUploads = pendingUploads.filter(
+                (candidate) => candidate.itemId !== upload.itemId,
+            );
+        } catch (error) {
+            console.error("Failed to delete previous upload:", error);
+            pendingError = `Could not delete "${upload.name}". Please try again.`;
+        } finally {
+            pendingBusyId = null;
+        }
+    }
+
+    function formatUploadDate(iso: string): string {
+        if (!iso) return "";
+        const parsed = new Date(iso);
+        if (Number.isNaN(parsed.getTime())) return "";
+        return parsed.toLocaleString("en-US", {
+            timeZone: "America/Chicago",
+            dateStyle: "medium",
+            timeStyle: "short",
+        });
+    }
 
     /**
      * Validates if the file type is allowed (zip or tar variants)
@@ -213,16 +285,25 @@
     async function handleDelete() {
         if (!uploadedItemId) {
             resetUpload();
+            dispatch("uploaddeleted");
             return;
         }
         isDeletingUpload = true;
         try {
             await deleteItem(uploadedItemId);
         } catch (error) {
+            // Keep uploadedItemId: the item still exists, and forgetting its id
+            // here is precisely what used to strand it out of the user's reach.
             console.error("Failed to delete item:", error);
+            errorMessage =
+                "Could not delete the uploaded file. Please try again.";
             isDeletingUpload = false;
+            return;
         }
         resetUpload();
+        // The parent is still holding the file id of what was just deleted;
+        // without this it would submit a dangling reference.
+        dispatch("uploaddeleted");
     }
 
     function resetUpload() {
@@ -251,6 +332,76 @@
         <div class="error-banner">
             <span class="material-icons">error</span>
             <span>{errorMessage}</span>
+        </div>
+    {/if}
+
+    {#if pendingUploads.length > 0 && !isUploading}
+        {@const single = pendingUploads.length === 1}
+        <div class="pending-uploads">
+            <div class="pending-header">
+                <span class="material-icons pending-icon">history</span>
+                <div>
+                    <div class="pending-title">
+                        {single
+                            ? "You have an unsubmitted upload"
+                            : `You have ${pendingUploads.length} unsubmitted uploads`}
+                    </div>
+                    <div class="pending-subtitle">
+                        {single ? "It was" : "They were"} uploaded earlier but never
+                        submitted, and {single ? "it counts" : "they count"} against
+                        your storage quota. Use {single ? "it" : "one"} for this submission,
+                        or delete {single ? "it" : "them"}.
+                    </div>
+                </div>
+            </div>
+
+            {#if pendingError}
+                <div class="pending-error" role="alert">{pendingError}</div>
+            {/if}
+
+            <ul class="pending-list">
+                {#each pendingUploads as upload (upload.itemId)}
+                    <li class="pending-row">
+                        <div class="file-info">
+                            <span class="material-icons file-type-icon"
+                                >description</span
+                            >
+                            <div class="file-details">
+                                <div class="file-name">{upload.name}</div>
+                                <div class="file-size">
+                                    {formatFileSize(upload.size)}{formatUploadDate(
+                                        upload.created,
+                                    )
+                                        ? ` • ${formatUploadDate(upload.created)}`
+                                        : ""}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pending-actions">
+                            {#if upload.fileId}
+                                <button
+                                    class="pending-use-button"
+                                    on:click={() => usePendingUpload(upload)}
+                                    disabled={pendingBusyId === upload.itemId}
+                                >
+                                    <span class="material-icons">check</span>
+                                    Use this file
+                                </button>
+                            {/if}
+                            <button
+                                class="pending-delete-button"
+                                on:click={() => deletePendingUpload(upload)}
+                                disabled={pendingBusyId === upload.itemId}
+                            >
+                                <span class="material-icons">delete</span>
+                                {pendingBusyId === upload.itemId
+                                    ? "Deleting…"
+                                    : "Delete"}
+                            </button>
+                        </div>
+                    </li>
+                {/each}
+            </ul>
         </div>
     {/if}
 
@@ -353,6 +504,130 @@
 </div>
 
 <style>
+    .pending-uploads {
+        padding: var(--md-spacing-md);
+        background-color: rgba(255, 152, 0, 0.08);
+        border: 1px solid rgba(255, 152, 0, 0.35);
+        border-radius: var(--md-radius-sm);
+        margin-bottom: var(--md-spacing-lg);
+    }
+
+    .pending-header {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--md-spacing-sm);
+    }
+
+    .pending-icon {
+        font-size: 1.5rem;
+        color: #ef6c00;
+        flex-shrink: 0;
+    }
+
+    .pending-title {
+        font-weight: 500;
+        color: var(--md-on-surface);
+        font-size: var(--md-font-body2);
+        line-height: 1.3;
+    }
+
+    .pending-subtitle {
+        font-size: var(--md-font-caption);
+        color: var(--md-on-surface-variant);
+        margin-top: 2px;
+    }
+
+    .pending-error {
+        margin-top: var(--md-spacing-sm);
+        color: var(--md-error);
+        font-size: var(--md-font-caption);
+        font-weight: 500;
+    }
+
+    .pending-list {
+        list-style: none;
+        margin: var(--md-spacing-md) 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--md-spacing-sm);
+    }
+
+    .pending-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--md-spacing-md);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        background-color: var(--md-surface);
+        border-radius: var(--md-radius-xs);
+    }
+
+    .pending-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        flex-shrink: 0;
+    }
+
+    .pending-use-button,
+    .pending-delete-button {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        padding: var(--md-spacing-xs) var(--md-spacing-sm);
+        font-size: var(--md-font-body2);
+        font-weight: 500;
+        min-width: auto;
+    }
+
+    .pending-use-button {
+        background-color: var(--md-primary);
+        color: white;
+    }
+
+    .pending-use-button:hover:not(:disabled) {
+        box-shadow: var(--md-elevation-1);
+    }
+
+    .pending-use-button:focus-visible {
+        outline: 3px solid var(--md-primary-dark);
+        outline-offset: 2px;
+    }
+
+    .pending-delete-button {
+        background-color: transparent;
+        color: var(--md-error);
+        border: 1px solid rgba(244, 67, 54, 0.5);
+    }
+
+    .pending-delete-button:hover:not(:disabled) {
+        background-color: rgba(244, 67, 54, 0.08);
+    }
+
+    .pending-delete-button:focus-visible {
+        outline: 3px solid var(--md-error-dark);
+        outline-offset: 2px;
+    }
+
+    .pending-use-button:disabled,
+    .pending-delete-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    @media (max-width: 768px) {
+        .pending-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: var(--md-spacing-sm);
+        }
+
+        .pending-actions {
+            justify-content: flex-end;
+        }
+    }
+
     .delete-and-reset-button {
         display: flex;
         align-items: center;

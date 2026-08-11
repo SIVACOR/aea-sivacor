@@ -255,6 +255,76 @@ export async function deleteItem(itemId: string): Promise<void> {
 }
 
 /**
+ * An archive sitting in the user's Uploads folder that no submission has claimed.
+ */
+export interface PendingUpload {
+    itemId: string;
+    /** null when the item does not hold exactly one file, i.e. cannot be submitted as-is. */
+    fileId: string | null;
+    name: string;
+    size: number;
+    created: string;
+}
+
+/**
+ * Lists uploads that are still sitting in the user's Uploads folder.
+ *
+ * An upload lands in the user's own Uploads folder and stays there -- counting
+ * against their storage quota -- until the worker's prepare_submission step
+ * *moves* the item into the admin-owned Submissions collection. That move is
+ * what transfers the bytes off the user's quota, so anything still in Uploads
+ * has no live submission behind it: either the user never pressed Run, or the
+ * submission died before the worker claimed the item. Nothing on the server
+ * ever cleans these up, so without this listing they are invisible and
+ * permanent.
+ *
+ * @returns {Promise<PendingUpload[]>} Unclaimed uploads, newest first.
+ */
+export async function listPendingUploads(): Promise<PendingUpload[]> {
+    let folderId: string;
+    try {
+        folderId = await getUploadsFolder();
+    } catch {
+        // The Uploads folder is only created for users registered after the
+        // plugin was installed; if there is none, nothing can be pending.
+        return [];
+    }
+
+    const items = await api<Array<{ _id: string; name: string; size?: number; created?: string }>>(
+        `/item?folderId=${folderId}&limit=100&sort=created&sortdir=-1`
+    );
+    if (!Array.isArray(items) || items.length === 0) {
+        return [];
+    }
+
+    // submitJob() takes a *file* id, but a folder lists *items*, so each
+    // candidate needs its file resolved before it can be offered for reuse.
+    return Promise.all(
+        items.map(async (item) => {
+            let fileId: string | null = null;
+            try {
+                const files = await api<Array<{ _id: string }>>(`/item/${item._id}/files?limit=2`);
+                // One file per item is the shape the uploader produces. Anything
+                // else cannot be handed to submit_job unambiguously, so it is
+                // listed for deletion only.
+                if (Array.isArray(files) && files.length === 1) {
+                    fileId = files[0]._id;
+                }
+            } catch {
+                fileId = null;
+            }
+            return {
+                itemId: item._id,
+                fileId,
+                name: item.name,
+                size: item.size ?? 0,
+                created: item.created ?? ''
+            };
+        })
+    );
+}
+
+/**
  * Sets the authentication token in the preferred storage (e.g., as a cookie).
  * @param {string} token - The 'Girder-Token' value.
  */
