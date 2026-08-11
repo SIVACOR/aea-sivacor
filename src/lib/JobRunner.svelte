@@ -217,6 +217,16 @@
     }
 
     /**
+     * Clears the staged file once the uploader has deleted it. Without this the
+     * form keeps the id of a file that no longer exists and submit fails with a
+     * confusing server error instead of "Please upload a file first."
+     */
+    function handleUploadDeleted() {
+        uploadedFileId = null;
+        jobStatusMessage = "";
+    }
+
+    /**
      * Replaces the form's steps and secrets with an imported workflow
      * definition. WorkflowImport has already validated it against the schema
      * served by the backend and against the available images, so this only has
@@ -445,7 +455,10 @@
     </div>
 
     <div class="runner-content">
-        <FileUploader on:uploadcomplete={handleUploadComplete} />
+        <FileUploader
+            on:uploadcomplete={handleUploadComplete}
+            on:uploaddeleted={handleUploadDeleted}
+        />
 
         <div class="config-section">
             <WorkflowImport
