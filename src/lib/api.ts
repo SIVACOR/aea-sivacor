@@ -131,15 +131,43 @@ export function getCurrentUser(): User | null {
     return currentUser;
 }
 
+/** Cached so the settings fetch happens once, not on every upload. */
+let uploadsFolderNamePromise: Promise<string> | null = null;
+
+/**
+ * The name of the per-user uploads folder, per the backend's
+ * `sivacor.uploads_folder_name` setting.
+ *
+ * The backend creates *and* looks up the folder under this name, so hardcoding
+ * "Uploads" here would break every upload the moment an admin changed it.
+ * Falls back to "Uploads" -- the setting's own default -- when the settings
+ * call fails or the key is absent, which is also what folders created before
+ * the setting went live are named.
+ */
+async function getUploadsFolderName(): Promise<string> {
+    if (!uploadsFolderNamePromise) {
+        uploadsFolderNamePromise = getPublicSettings()
+            .then((settings) => {
+                const name = settings?.['sivacor.uploads_folder_name'];
+                return typeof name === 'string' && name ? name : 'Uploads';
+            })
+            .catch(() => 'Uploads');
+    }
+    return uploadsFolderNamePromise;
+}
+
 export async function getUploadsFolder() {
     const user = getCurrentUser();
     if (!user || !user._id) {
         throw new Error('User not logged in or user ID not available.');
     }
-    const endpoint = `/folder?parentType=user&parentId=${user._id}&name=Uploads&limit=1`;
+    const name = await getUploadsFolderName();
+    const endpoint =
+        `/folder?parentType=user&parentId=${user._id}` +
+        `&name=${encodeURIComponent(name)}&limit=1`;
     const folder = await api<Folder[]>(endpoint);
     if (!Array.isArray(folder) || folder.length !== 1) {
-        throw new Error('Uploads folder not found for the current user.');
+        throw new Error(`${name} folder not found for the current user.`);
     }
     return folder[0]._id;
 }

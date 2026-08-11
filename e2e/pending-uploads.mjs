@@ -13,7 +13,17 @@
 // survives on the server.
 
 import fs from 'fs';
-import { API, apiGet, bodyText, getToken, makePackage, open, sleep } from './lib.mjs';
+import {
+    API,
+    apiGet,
+    bodyText,
+    getToken,
+    makePackage,
+    open,
+    resetToRunner,
+    sleep,
+    waitTerminal,
+} from './lib.mjs';
 
 const fails = [];
 const ok = (cond, msg) => {
@@ -69,6 +79,12 @@ async function main() {
 
     const { page, close } = await open();
     try {
+        // The panel lives in JobRunner, which JobMonitor only mounts when no
+        // job is being watched. A completed submission left over from an
+        // earlier run shows the monitor instead, so the form has to be
+        // reclaimed before any of this means anything.
+        ok(await resetToRunner(page), 'runner form is showing (not the monitor)');
+
         const panel = page.locator('.pending-uploads');
         await page.waitForSelector('.pending-uploads', { timeout: 15000 }).catch(() => {});
 
@@ -148,8 +164,16 @@ async function main() {
         ok(moved, 'submitted item moves out of Uploads (quota released)');
 
         // --- clean folder means no panel ---------------------------------
-        await page.reload({ waitUntil: 'networkidle' });
+        // Reclaim the form first: the submit above put the monitor on screen,
+        // and "no panel" is vacuously true there whether or not the listing
+        // works. The reset control only exists once the job is terminal --
+        // the item leaving Uploads happens early in prepare_submission, so
+        // that is nowhere near a good enough signal to reset on.
+        const finalStatus = await waitTerminal(page);
+        console.log(`   job reached ${finalStatus}`);
+        const backOnRunner = await resetToRunner(page);
         await sleep(3000);
+        ok(backOnRunner, 'runner form reclaimed for the empty-folder check');
         ok(
             (await page.locator('.pending-uploads').count()) === 0,
             'no panel when the Uploads folder is empty'
