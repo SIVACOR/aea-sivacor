@@ -67,7 +67,7 @@ The runner form is uncontrolled markup, so these are the load-bearing hooks:
 | archive picker | `#file-input` |
 | start the chunked upload | `button.upload-button` (upload is **not** automatic) |
 | upload finished | body text `Upload Successful` |
-| image / tag | `select[id^="image-select-"]` / `select[id^="image-tag-"]` |
+| image / tag | `select[id^="image-select-"]` / `select[id^="tag-select-"]` |
 | main file | `input[id^="execution-file-"]` |
 | submit | `button.run-button` |
 | back to the runner | button matching `/run a new job|new job|new submission/i` |

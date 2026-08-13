@@ -189,10 +189,7 @@ export async function submitJob(page, opts = {}) {
     if (!skipForm) {
         await page.selectOption('select[id^="image-select-"]', image);
         await page.waitForTimeout(400);
-        await page.selectOption(
-            'select[id^="image-tag-"], select:not([id^="image-select-"]):not(.disabled-select)',
-            tag
-        );
+        await page.selectOption('select[id^="tag-select-"]', tag);
         await page.fill('input[id^="execution-file-"]', mainFile);
     }
 

@@ -137,10 +137,7 @@ async function main() {
         // trips validation and no request is ever made.
         await page.selectOption('select[id^="image-select-"]', 'rocker/r-ver');
         await page.waitForTimeout(400);
-        await page.selectOption(
-            'select[id^="image-tag-"], select:not([id^="image-select-"]):not(.disabled-select)',
-            '4.6.1'
-        );
+        await page.selectOption('select[id^="tag-select-"]', '4.6.1');
         await page.fill('input[id^="execution-file-"]', 'main.R');
 
         const submitResp = page.waitForResponse(
