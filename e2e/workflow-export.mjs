@@ -47,6 +47,16 @@ check('documents the secrets placeholder', /env_secrets/.test(yaml) && !/s3cret/
 check('image_tag stays a quoted string', /image_tag: "[^"]+"/.test(yaml),
     (yaml.match(/image_tag:.*/) || [''])[0].trim());
 
+// P4.2: the size has to round-trip, or exporting a run and re-submitting it
+// silently moves it onto a different machine. `resources` must sit at column 0
+// -- a peer of `stages` -- however the header block is assembled.
+const resourcesLine = (yaml.match(/^resources:$/m) || [])[0];
+const memoryLine = (yaml.match(/^ {2}memory_gb: \d+$/m) || [])[0];
+check('the requested worker size is exported', Boolean(resourcesLine && memoryLine),
+    `${resourcesLine ?? 'no resources:'} / ${memoryLine ?? 'no memory_gb'}`);
+check('resources is a top-level peer of stages',
+    yaml.split('\n').filter((l) => /^\S/.test(l)).map((l) => l.split(':')[0]).includes('resources'));
+
 // Round-trip: the exported file must be importable as-is.
 await resetToRunner(page);
 await page.locator('span.import-title').click();
@@ -66,6 +76,16 @@ const mainFiles = await page
     .evaluateAll((els) => els.map((e) => e.value));
 check('round-trip preserves the stage', JSON.stringify(mainFiles) === JSON.stringify(['main.R']),
     JSON.stringify(mainFiles));
+
+// The exported figure must come back as the picker's value, not merely parse.
+const exportedMemory = (memoryLine ?? '').match(/\d+/)?.[0] ?? null;
+const pickerAfterImport = await page
+    .locator('#worker-size-select')
+    .inputValue()
+    .catch(() => null);
+check('round-trip preserves the worker size',
+    exportedMemory !== null && pickerAfterImport === exportedMemory,
+    `exported ${exportedMemory}, picker ${pickerAfterImport}`);
 
 // -- multi-stage, and a run that failed -----------------------------------
 // The point of the feature is handing on a multi-step setup, and a broken one

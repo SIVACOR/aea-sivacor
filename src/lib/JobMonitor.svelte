@@ -99,6 +99,15 @@
         : [];
     $: hasWorkflowDefinition = submissionStages.length > 0;
 
+    // The size this submission asked for, written to the folder by
+    // prepare_submission so the exporter can see it. Absent on anything
+    // submitted before the size was recorded at all, which is why the export
+    // omits the block rather than guessing a figure.
+    $: requestedMemoryGb =
+        typeof latestSubmission?.meta?.requested_memory_gb === "number"
+            ? (latestSubmission.meta.requested_memory_gb as number)
+            : null;
+
     // File type mappings for downloadable files
     const FILE_TYPE_LABELS = {
         sig_file_id: { label: "TRS Signature", success: true },
@@ -356,8 +365,21 @@
             '#     - key: API_TOKEN',
             '#       value: ""',
             "",
-            "stages:",
         ];
+
+        // A peer of `stages`, at column 0, and only when the submission recorded
+        // a size: re-importing a file that names a rung the importer cannot have
+        // fails, so an export that never asked for one must not start asking.
+        if (requestedMemoryGb !== null) {
+            header.push(
+                "# The worker this ran on. Remove this block to take the",
+                "# default size instead.",
+                "resources:",
+                `  memory_gb: ${requestedMemoryGb}`,
+                "",
+            );
+        }
+        header.push("stages:");
 
         const body = stages.map((stage: WorkflowStage) =>
             [

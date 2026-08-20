@@ -2,6 +2,7 @@
     import { createEventDispatcher } from "svelte";
     import {
         getWorkflowSchema,
+        type WorkerSize,
         type WorkflowDefinition,
         type WorkflowStage,
     } from "./api";
@@ -14,6 +15,14 @@
      * catching it here beats populating the form with something unselectable.
      */
     export let imagesData: Record<string, string[]> = {};
+    /**
+     * The worker-size catalogue, as loaded by the parent, for the same reason:
+     * `resources.memory_gb` is an enum of these figures server-side, so a file
+     * naming a withdrawn or gated rung is rejected at submit -- better to say
+     * so here, while the user still has the file in front of them.
+     * @type {WorkerSize[]}
+     */
+    export let workerSizes: WorkerSize[] = [];
     export let disabled = false;
 
     const ALLOWED_EXTENSIONS = [".yaml", ".yml", ".json"];
@@ -25,6 +34,14 @@
     const MAX_FILE_SIZE = 256 * 1024;
 
     const dispatch = createEventDispatcher();
+
+    /**
+     * A real, selectable figure for the "Expected format" block, or null when
+     * the catalogue is unknown -- in which case the block omits `resources`
+     * entirely rather than printing a number the server might reject.
+     */
+    $: exampleMemoryGb =
+        workerSizes.find((size) => size.selectable)?.memory_gb ?? null;
 
     let isParsing = false;
     let isDragging = false;
@@ -132,6 +149,33 @@
                 );
             }
         });
+
+        // The requested worker size, checked the same way as an image: it is an
+        // enum of the catalogue's figures on the server, so the message has to
+        // name the surviving sizes rather than say "invalid" -- an exported
+        // workflow carries a bare number, and a rung can be withdrawn.
+        // Skipped when the catalogue failed to load, exactly as above.
+        const requestedMemory = definition.resources?.memory_gb;
+        if (typeof requestedMemory === "number" && workerSizes.length > 0) {
+            const match = workerSizes.find(
+                (size) => size.memory_gb === requestedMemory,
+            );
+            const offered = workerSizes
+                .filter((size) => size.selectable)
+                .map((size) => `${size.memory_gb} GB`);
+            if (!match) {
+                problems.push(
+                    `resources: no ${requestedMemory} GB worker size is ` +
+                        `offered. Available: ${summarize(offered)}.`,
+                );
+            } else if (!match.selectable) {
+                problems.push(
+                    `resources: the ${requestedMemory} GB worker is not ` +
+                        "self-service. Email support@sivacor.org to request " +
+                        `it, or choose one of: ${summarize(offered)}.`,
+                );
+            }
+        }
 
         // A plain array, not a Set: these lists are a handful of entries, and a
         // Set here would trip svelte/prefer-svelte-reactivity for no gain.
@@ -336,10 +380,18 @@
     network_isolation: true
 env_secrets:
   - key: API_TOKEN
-    value: s3cret`}</pre>
+    value: s3cret${
+        exampleMemoryGb === null
+            ? ""
+            : `
+resources:
+  memory_gb: ${exampleMemoryGb}`
+    }`}</pre>
             <p>
-                <code>network_isolation</code> and <code>env_secrets</code> are
-                optional. Secrets are read from the file into this form only — like
+                <code>network_isolation</code>, <code>env_secrets</code> and
+                <code>resources</code> are optional. A file with no
+                <code>resources</code> block leaves the worker size as chosen
+                below. Secrets are read from the file into this form only — like
                 secrets typed by hand, they are never saved in your browser.
             </p>
         </details>

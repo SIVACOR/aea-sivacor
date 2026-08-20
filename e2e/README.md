@@ -15,8 +15,12 @@ Everything here is plain ESM run directly with `node`. No test framework.
 2. **playwright** importable from anywhere (deliberately *not* a dependency of
    this repo):
    ```bash
-   npm i -g playwright && npx playwright install chromium
+   npm i -g playwright
    ```
+   Its browser download is **not** needed: the harness drives the system Chrome
+   (`/usr/bin/google-chrome`) via `executablePath`. Point `SIVACOR_E2E_CHROME`
+   somewhere else if your browser lives elsewhere, or set it empty to fall back
+   to playwright's own build (`npx playwright install chromium`).
 3. `zip` on PATH (used once to build the fixture package).
 4. A Docker image the worker can actually run, already pulled — `rocker/r-ver:4.6.1`
    is the cheap default (`docker pull rocker/r-ver:4.6.1`). Stata images need a

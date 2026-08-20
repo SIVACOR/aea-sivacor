@@ -94,12 +94,47 @@ export interface WorkflowStage {
 }
 
 /**
+ * Workflow-level resources, i.e. the machine the whole submission runs on.
+ * Workflow-level and not per-stage because every stage of one submission runs
+ * on one worker; a per-stage figure would be a promise the platform cannot
+ * keep.
+ */
+export interface WorkflowResources {
+    memory_gb?: number;
+}
+
+/**
  * A whole workflow definition, i.e. what a user can import from a YAML/JSON
  * file. Shaped by the `stage_schema` served from /sivacor/workflow_schema.
  */
 export interface WorkflowDefinition {
     stages: WorkflowStage[];
     env_secrets?: Array<{ key: string; value: string }>;
+    resources?: WorkflowResources;
+}
+
+/**
+ * One rung of the worker-size catalogue, as GET /sivacor/worker_sizes reports
+ * it. `memory_gb` is the advertised RAM figure, and it is also the value that
+ * travels in an exported workflow file -- the class *is* the number, so there
+ * is deliberately no cloud flavour name here to leak into a user's YAML.
+ *
+ * `gated` and `selectable` say different things and both are needed: `gated`
+ * is a property of the catalogue (this rung is by request), `selectable` is the
+ * answer for whoever asked. A rung can be gated and selectable at once, for a
+ * member of the group that may have it.
+ */
+export interface WorkerSize {
+    memory_gb: number;
+    vcpus: number;
+    gated: boolean;
+    selectable: boolean;
+}
+
+export interface WorkerSizeCatalogue {
+    sizes: WorkerSize[];
+    /** What a submission gets when it asks for nothing: the smallest ungated rung. */
+    default: number | null;
 }
 
 // API Base URL from environment variable with fallback for development
@@ -579,6 +614,27 @@ export async function getWorkflowSchema(): Promise<Record<string, unknown>> {
 }
 
 /**
+ * Fetches the worker sizes this user may ask for.
+ *
+ * `selectable` is filled in client-side when the server does not send it: the
+ * UI and the API are separate deployments, so this build can meet a Girder that
+ * predates the group gate. Falling back to `!gated` reproduces that server's
+ * actual behaviour exactly -- it refuses every gated rung to everyone -- rather
+ * than offering a rung it would then reject.
+ * @returns {Promise<WorkerSizeCatalogue>} The catalogue, plus the default size.
+ */
+export async function getWorkerSizes(): Promise<WorkerSizeCatalogue> {
+    const response = await api<WorkerSizeCatalogue>('/sivacor/worker_sizes');
+    return {
+        default: response?.default ?? null,
+        sizes: (response?.sizes ?? []).map((size) => ({
+            ...size,
+            selectable: size.selectable ?? !size.gated,
+        })),
+    };
+}
+
+/**
  * Fetches Girder's public (unauthenticated) settings, which SIVACOR extends
  * with the maintenance-banner settings (`sivacor.banner_enabled`,
  * `sivacor.banner_message`). Works without a valid auth token.
@@ -639,9 +695,14 @@ export function getFileDownloadUrl(fileId: string): string {
  * Submits a new processing job.
  * @param {string} fileId - The ID of the uploaded file.
  * @param {JobStageConfig[]} config - The configuration for the job stages.
+ * @param {Record<string, string>} jobSecrets - Environment secrets for every stage.
+ * @param {number | null} memoryGb - The worker size to ask for, or null to take
+ *   the server's default. Omitted from the body entirely when null: the schema
+ *   types memory_gb as an integer, so a null would be rejected, and "absent"
+ *   is what every submission sent before there was anything to pick.
  * @returns {Promise<any>} The response object from the job creation endpoint.
  */
-export async function submitJob(fileId: string, config: JobStageConfig[], jobSecrets: Record<string, string> = {}): Promise<JobDetails> {
+export async function submitJob(fileId: string, config: JobStageConfig[], jobSecrets: Record<string, string> = {}, memoryGb: number | null = null): Promise<JobDetails> {
     const endpoint = `/sivacor/submit_job`;
 
     // translate config object to match expected API format
@@ -660,7 +721,11 @@ export async function submitJob(fileId: string, config: JobStageConfig[], jobSec
     // Send file ID as query param (non-sensitive) but stages+secrets in POST body
     const response = await api<JobDetails>(`${endpoint}?id=${encodeURIComponent(fileId)}`, {
         method: 'POST',
-        body: JSON.stringify({ stages: transformedConfig, env_secrets: secretsList }),
+        body: JSON.stringify({
+            stages: transformedConfig,
+            env_secrets: secretsList,
+            ...(memoryGb === null ? {} : { resources: { memory_gb: memoryGb } }),
+        }),
     });
 
     return response;

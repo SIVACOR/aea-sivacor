@@ -4,7 +4,9 @@
     import {
         submitJob,
         getImages,
+        getWorkerSizes,
         type ApiError,
+        type WorkerSize,
         type WorkflowDefinition,
     } from "./api";
     import FileUploader from "./FileUploader.svelte";
@@ -80,11 +82,66 @@
     // Job-level secrets — in-memory only, never persisted to localStorage
     let jobSecrets: Record<string, string> = {};
 
+    /**
+     * The worker-size catalogue, and the rung this submission asks for.
+     *
+     * Workflow-level, deliberately: `pin_chain` binds every step of a
+     * submission to one worker, so a per-stage size would be a promise the
+     * platform cannot keep — and it would mean touching all six places the
+     * configEntries shape is written out.
+     *
+     * `null` means "say nothing and take the server's default", which is what
+     * every submission did before this control existed. It stays null when the
+     * catalogue cannot be fetched, so a UI newer than its Girder degrades to
+     * the old behaviour instead of guessing a number.
+     * @type {WorkerSize[]}
+     */
+    let workerSizes: WorkerSize[] = [];
+    /** @type {number | null} */
+    let selectedMemoryGb: number | null = null;
+
+    /** How much of a rung's RAM the analysis actually gets, per S1 property 3. */
+    const MEMORY_HEADROOM_GB = 2;
+    /** Flat across the whole ladder: a bigger worker buys no more disk (D6). */
+    const ROOT_DISK_GB = 60;
+
+    $: gatedSizes = workerSizes.filter((size) => size.gated && !size.selectable);
+    // The SU cost of a rung is its vCPU count on Jetstream2, and the ladder
+    // doubles both together, so the ratio is the honest way to say "this one is
+    // dearer" without printing a currency the user cannot check.
+    $: costRatio =
+        workerSizes.length > 1
+            ? Math.round(
+                  workerSizes[workerSizes.length - 1].vcpus /
+                      workerSizes[0].vcpus,
+              )
+            : 1;
+
+    /**
+     * The label for one rung. The number *is* the class -- there is no
+     * "standard"/"large" to look up -- and the usable figure keeps its `≈`
+     * because it is advertised minus our own headroom only: the kernel also
+     * reserves ~0.6-2 GiB, growing with the rung, so this overstates what the
+     * container gets and must never read as exact.
+     */
+    function sizeLabel(size: WorkerSize): string {
+        const usable = size.memory_gb - MEMORY_HEADROOM_GB;
+        const cores = `${size.vcpus} core${size.vcpus === 1 ? "" : "s"}`;
+        return (
+            `${size.memory_gb} GiB · ${cores} — ≈${usable} GiB usable` +
+            (size.gated && !size.selectable ? " (by request)" : "")
+        );
+    }
+
     const dispatch = createEventDispatcher();
 
     // Storage keys for persisting user preferences
     const STORAGE_KEYS = {
         configEntries: "sivacor_config_entries",
+        // Its own key rather than a field on the config entries: the size is
+        // workflow-level, and folding it into that array would mean migrating
+        // every previously-saved value.
+        memoryGb: "sivacor_worker_size",
     };
 
     /**
@@ -149,12 +206,67 @@
         }
     }
 
+    /**
+     * Fetches the size catalogue and settles on a rung.
+     *
+     * Non-fatal on purpose, and separate from the images fetch: a Girder that
+     * predates the catalogue endpoint, or a transient failure, must not stop
+     * the form working. The picker simply does not render, and the submission
+     * takes the server's default -- exactly what happened before there was
+     * anything to choose.
+     */
+    async function loadWorkerSizes() {
+        try {
+            const catalogue = await getWorkerSizes();
+            workerSizes = catalogue.sizes;
+            if (workerSizes.length === 0) {
+                return;
+            }
+            const remembered = Number(
+                localStorage.getItem(STORAGE_KEYS.memoryGb),
+            );
+            // Only honour a remembered size that is still on offer *to this
+            // user*. A rung can be withdrawn from the catalogue, and group
+            // membership can be lost, and in both cases the server would reject
+            // the submission -- with a message about a size the user never
+            // knowingly chose.
+            const usable = workerSizes.some(
+                (size) => size.memory_gb === remembered && size.selectable,
+            );
+            selectedMemoryGb = usable
+                ? remembered
+                : (catalogue.default ??
+                  workerSizes.find((size) => size.selectable)?.memory_gb ??
+                  null);
+        } catch (error) {
+            console.warn("Could not load worker sizes:", error);
+        }
+    }
+
+    function saveWorkerSize() {
+        try {
+            localStorage.setItem(
+                STORAGE_KEYS.memoryGb,
+                String(selectedMemoryGb),
+            );
+        } catch (error) {
+            console.warn("Failed to save the worker size:", error);
+        }
+    }
+
     // Reactive statements to save user selections when they change
     $: if (configEntries && configEntries.length > 0 && !isInitializing) {
         saveUserSelections();
     }
 
+    $: if (selectedMemoryGb !== null && !isInitializing) {
+        saveWorkerSize();
+    }
+
     onMount(async () => {
+        // Before the images, so `isInitializing` still covers it and settling
+        // on a remembered rung does not immediately write it back.
+        await loadWorkerSizes();
         try {
             imagesData = await getImages();
             availableImages = Object.keys(imagesData);
@@ -251,6 +363,14 @@
         jobSecrets = Object.fromEntries(
             (definition.env_secrets ?? []).map(({ key, value }) => [key, value]),
         );
+        // WorkflowImport has already checked the requested rung against the
+        // catalogue, so anything that arrives here is selectable. A file with no
+        // `resources` block -- every workflow exported before this shipped --
+        // leaves the current choice alone rather than resetting it: it asked for
+        // nothing, so it says nothing about the size.
+        if (typeof definition.resources?.memory_gb === "number") {
+            selectedMemoryGb = definition.resources.memory_gb;
+        }
         // A stale banner from an earlier attempt would otherwise sit under the
         // run button describing a form that no longer exists.
         jobErrorMessage = null;
@@ -401,6 +521,7 @@
                 uploadedFileId,
                 validConfig,
                 jobSecrets,
+                selectedMemoryGb,
             );
             jobId = response._id || "N/A";
             jobStatusMessage = `Job successfully started! Job ID: ${jobId}`;
@@ -463,6 +584,7 @@
         <div class="config-section">
             <WorkflowImport
                 {imagesData}
+                {workerSizes}
                 disabled={isJobRunning}
                 on:import={handleWorkflowImport}
             />
@@ -605,6 +727,68 @@
                 <span class="material-icons">add</span>
                 Add Step
             </button>
+
+            <!-- Worker size. Workflow-level, like the secrets below it: every
+                 step of a submission runs on one machine, so this cannot sit in
+                 a per-stage row without promising something untrue. Rendered
+                 only once the catalogue is known -- with none, the server picks,
+                 which is what it did before this control existed. -->
+            {#if workerSizes.length > 0}
+                <div
+                    class="resources-section"
+                    role="group"
+                    aria-labelledby="resources-section-title"
+                >
+                    <div class="resources-header">
+                        <span
+                            class="material-icons resources-icon"
+                            aria-hidden="true">memory</span
+                        >
+                        <span
+                            class="resources-label"
+                            id="resources-section-title">Worker Size (RAM · CPU)</span
+                        >
+                        <span class="resources-hint">Applies to all steps</span>
+                    </div>
+                    <div class="resources-body">
+                        <label for="worker-size-select" class="sr-only">
+                            Memory and cores for this submission
+                        </label>
+                        <select
+                            id="worker-size-select"
+                            bind:value={selectedMemoryGb}
+                            disabled={isJobRunning}
+                            aria-describedby="worker-size-hint"
+                        >
+                            <!-- Gated rungs are shown disabled rather than
+                                 hidden: a researcher who needs one has to be
+                                 able to see that it exists and how to ask. -->
+                            {#each workerSizes as size (size.memory_gb)}
+                                <option
+                                    value={size.memory_gb}
+                                    disabled={!size.selectable}
+                                >
+                                    {sizeLabel(size)}
+                                </option>
+                            {/each}
+                        </select>
+                        <div class="input-hint" id="worker-size-hint">
+                            Every size gets the same {ROOT_DISK_GB} GB of disk.
+                            {#if costRatio > 1}
+                                The largest costs about {costRatio}× the
+                                smallest, so pick the smallest that fits.
+                            {/if}
+                            {#if gatedSizes.length > 0}
+                                Sizes marked <em>(by request)</em> need
+                                approval: email
+                                <a href="mailto:support@sivacor.org"
+                                    >support@sivacor.org</a
+                                >.
+                            {/if}
+                        </div>
+                    </div>
+                </div>
+            {/if}
 
             <!-- Job-level Environment Secrets (in-memory only, never persisted) -->
             <div
@@ -1372,6 +1556,53 @@
     }
 
     /* Secrets section */
+    /* Same frame as .secrets-section: both are workflow-level panels sitting
+       below the per-step rows, and they should read as one pair rather than as
+       two unrelated boxes. */
+    .resources-section {
+        margin-top: var(--md-spacing-md);
+        padding: var(--md-spacing-sm) var(--md-spacing-md);
+        border: 1px solid var(--md-outline-variant, #cac4d0);
+        border-radius: var(--md-shape-corner-small, 4px);
+        background: var(--md-surface-variant, #f3edf7);
+    }
+
+    .resources-header {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        margin-bottom: var(--md-spacing-sm);
+    }
+
+    .resources-icon {
+        font-size: 1rem;
+        color: var(--md-primary-dark, #1565c0);
+    }
+
+    .resources-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--md-on-surface, #1c1b1f);
+    }
+
+    .resources-hint {
+        font-size: 0.75rem;
+        color: var(--md-on-surface-variant, #49454f);
+        flex: 1;
+    }
+
+    .resources-body select {
+        width: 100%;
+        max-width: 28rem;
+    }
+
+    /* .input-hint's -12px top margin exists to close the gap in .input-group's
+       flex column; here there is no gap to close, and it would drag the hint
+       over the select. */
+    .resources-body .input-hint {
+        margin: var(--md-spacing-sm) 0 0 0;
+    }
+
     .secrets-section {
         margin-top: var(--md-spacing-md);
         padding: var(--md-spacing-sm) var(--md-spacing-md);

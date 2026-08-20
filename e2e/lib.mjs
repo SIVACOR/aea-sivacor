@@ -32,10 +32,34 @@ function loadPlaywright() {
     );
 }
 
+/**
+ * Which browser binary to drive. Playwright's own chromium download is a
+ * ~150 MB prerequisite this harness does not need -- any recent Chrome speaks
+ * the same CDP -- so the system browser is the default. Override with
+ * SIVACOR_E2E_CHROME, or set it empty to use playwright's bundled build.
+ */
+export const CHROME =
+    process.env.SIVACOR_E2E_CHROME ?? '/usr/bin/google-chrome';
+
 export const DOMAIN = process.env.SIVACOR_E2E_DOMAIN || 'local.xarthisius.xyz';
 export const UI = `https://submit.${DOMAIN}`;
 export const API = `https://girder.${DOMAIN}/api/v1`;
 export const ADMIN = { login: 'admin', password: 'arglebargle123' }; // deploy-dev/setup_girder.py
+/**
+ * A plain, non-admin account, created on first use.
+ *
+ * This harness has only ever driven the admin, which cannot see any rule an
+ * admin bypasses -- the worker-size gate being the first of them (site admins
+ * may pick a gated rung by design, so to them nothing is ever gated). Testing
+ * the closed side of anything needs a user who is not one.
+ */
+export const MEMBER = {
+    login: 'e2euser',
+    password: 'e2e-password-123',
+    email: 'e2e@example.com',
+    firstName: 'E2E',
+    lastName: 'User',
+};
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -78,10 +102,73 @@ export async function getToken() {
     return (await r.json()).authToken.token;
 }
 
+/** Girder token for MEMBER, registering the account if it does not exist yet. */
+export async function getMemberToken(adminToken) {
+    const basic = Buffer.from(`${MEMBER.login}:${MEMBER.password}`).toString('base64');
+    const auth = () =>
+        fetch(`${API}/user/authentication`, { headers: { Authorization: `Basic ${basic}` } });
+    let r = await auth();
+    if (!r.ok) {
+        const qs = new URLSearchParams({
+            login: MEMBER.login,
+            email: MEMBER.email,
+            firstName: MEMBER.firstName,
+            lastName: MEMBER.lastName,
+            password: MEMBER.password,
+            admin: 'false',
+        });
+        // Created by the admin rather than self-registered, so it lands
+        // `enabled` whatever core.registration_policy says.
+        const created = await fetch(`${API}/user?${qs}`, {
+            method: 'POST',
+            headers: { 'Girder-Token': adminToken },
+        });
+        if (!created.ok) {
+            throw new Error(`could not create ${MEMBER.login}: ${created.status} ${await created.text()}`);
+        }
+        r = await auth();
+        if (!r.ok) throw new Error(`auth as ${MEMBER.login} failed: ${r.status}`);
+    }
+    return (await r.json()).authToken.token;
+}
+
 export async function apiGet(endpoint, token) {
     const r = await fetch(`${API}${endpoint}`, { headers: { 'Girder-Token': token } });
     if (!r.ok) throw new Error(`GET ${endpoint} -> ${r.status}`);
     return r.json();
+}
+
+/**
+ * Writes a Girder setting. deploy-dev seeds no worker-size catalogue, so it
+ * falls through to the plugin's single-rung default -- and a picker with one
+ * option cannot test picking. Scenarios that need a choice install a ladder
+ * here and put the original back when they are done.
+ */
+export async function setSetting(token, key, value) {
+    // Query parameters, not a request body. Girder's PUT /system/setting takes
+    // key and value as params, and a urlencoded body it never reads comes back
+    // **200 having changed nothing** -- which is how this helper first shipped,
+    // and a scenario whose setup silently no-ops reports the old behaviour as a
+    // failure of the new code.
+    const qs = new URLSearchParams({ key, value: JSON.stringify(value) });
+    const r = await fetch(`${API}/system/setting?${qs}`, {
+        method: 'PUT',
+        headers: { 'Girder-Token': token },
+    });
+    if (!r.ok) throw new Error(`PUT setting ${key} -> ${r.status} ${await r.text()}`);
+    // Read back rather than trust the 200, for the reason above. Key order is
+    // not preserved through Mongo, so compare canonically.
+    const canon = (v) =>
+        JSON.stringify(v, (_, x) =>
+            x && typeof x === 'object' && !Array.isArray(x)
+                ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]]))
+                : x
+        );
+    const stored = await apiGet(`/system/setting?key=${encodeURIComponent(key)}`, token);
+    if (canon(stored) !== canon(value)) {
+        throw new Error(`setting ${key} did not take. stored: ${canon(stored)}`);
+    }
+    return stored;
 }
 
 /** Server-side truth about submissions, for cross-checking what the UI claims. */
@@ -100,11 +187,19 @@ export function makePackage(dir = path.join(os.tmpdir(), 'sivacor-e2e')) {
     return zip;
 }
 
-/** Launch a probed browser already authenticated against the dev stack. */
-export async function open({ headless = true, probe = true } = {}) {
+/**
+ * Launch a probed browser already authenticated against the dev stack.
+ *
+ * Pass `token` to drive somebody other than the admin -- see MEMBER, and
+ * getMemberToken for one.
+ */
+export async function open({ headless = true, probe = true, token: asToken } = {}) {
     const { chromium } = loadPlaywright();
-    const token = await getToken();
-    const browser = await chromium.launch({ headless });
+    const token = asToken ?? (await getToken());
+    const browser = await chromium.launch({
+        headless,
+        ...(CHROME ? { executablePath: CHROME } : {}),
+    });
     const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
     if (probe) await ctx.addInitScript(PROBE_INIT);
     const page = await ctx.newPage();
@@ -179,6 +274,9 @@ export async function submitJob(page, opts = {}) {
         // Leave the step fields alone -- use when an imported workflow has
         // already filled them and overwriting would defeat the point.
         skipForm = false,
+        // Worker size to pick. null leaves whatever the picker defaulted to,
+        // which is also the only option on a stack with a one-rung catalogue.
+        memoryGb = null,
     } = opts;
 
     await page.setInputFiles('#file-input', zip);
@@ -192,6 +290,13 @@ export async function submitJob(page, opts = {}) {
         await page.selectOption('select[id^="tag-select-"]', tag);
         await page.fill('input[id^="execution-file-"]', mainFile);
     }
+    // Outside the skipForm guard: an imported workflow may name a size, and a
+    // scenario that wants a different one has to be able to say so. The picker
+    // is absent when the server has no catalogue endpoint, which must not be a
+    // failure here.
+    if (memoryGb !== null && (await page.locator('#worker-size-select').count())) {
+        await page.selectOption('#worker-size-select', String(memoryGb));
+    }
 
     const responded = page.waitForResponse(
         (r) => r.url().includes('/sivacor/submit_job') && r.request().method() === 'POST',
@@ -200,12 +305,20 @@ export async function submitJob(page, opts = {}) {
     await page.click('button.run-button');
     const res = await responded;
     const body = await res.json().catch(() => null);
+    // What the form actually put on the wire, which is the only place a picker
+    // that renders correctly but sends nothing can be caught.
+    let sent = null;
+    try {
+        sent = JSON.parse(res.request().postData() ?? 'null');
+    } catch {
+        /* not JSON; leave null */
+    }
     if (res.status() === 200) {
         await page.waitForFunction(() => /Job ID/i.test(document.body.innerText), null, {
             timeout: 120000,
         });
     }
-    return { status: res.status(), id: body?._id ?? null, body };
+    return { status: res.status(), id: body?._id ?? null, body, sent };
 }
 
 /** Sample which job the monitor displays, once a second. Catches state that
