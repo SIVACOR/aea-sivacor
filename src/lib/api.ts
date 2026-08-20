@@ -64,7 +64,54 @@ export interface PerformanceMetrics {
     NCPU?: number;
     MemTotal?: number;
     OperatingSystem?: string;
+    /**
+     * The container's own run arguments, as a JSON *string* -- the backend dumps
+     * `container_kwargs` verbatim (lib.py), and this is the field the TRO
+     * certifies as DockerRunArgs. `mem_limit` inside it is the cap the analysis
+     * was actually given; see containerMemoryLimit.
+     */
+    DockerRunArgs?: string;
+    /** The rung the submission asked for. Absent on runs from before P1. */
+    RequestedMemoryGB?: number | null;
     [key: string]: unknown;
+}
+
+/**
+ * The memory cap one stage's container was given, in bytes.
+ *
+ * Read out of `DockerRunArgs` rather than from a field of its own, which is a
+ * deliberate deviation from the plan's "add mem_limit_bytes to
+ * PerformanceMetrics": the file has no such field, the number is already inside
+ * DockerRunArgs on every run since 2026-08-12, and adding a second copy would
+ * put two spellings of one figure into a file that gets hashed into a signed
+ * TRO. Parsing it also means the hint works for submissions that already exist,
+ * which a new backend field could not.
+ *
+ * Absent when Docker reported no MemTotal, in which case the analysis really was
+ * uncapped and there is no fraction to show.
+ */
+export function containerMemoryLimit(metrics: PerformanceMetrics): number | null {
+    if (typeof metrics?.DockerRunArgs !== 'string') {
+        return null;
+    }
+    try {
+        const limit = JSON.parse(metrics.DockerRunArgs)?.mem_limit;
+        return typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? limit : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * What the previous submission's memory actually came to, as the picker's
+ * evidence (S5 guard 1). Best-effort by construction: submissions are deleted
+ * after the retention window, so this is often simply absent.
+ */
+export interface PreviousRunMemory {
+    /** The highest peak across the run's stages -- one submission, one machine. */
+    peakBytes: number;
+    /** The cap that run was given, when it can be recovered. */
+    limitBytes: number | null;
 }
 
 interface JobStageConfig {

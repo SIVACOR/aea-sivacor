@@ -65,7 +65,26 @@ check('metrics section does not flicker', flicker.sawFilled && flicker.blanks ==
 
 // -- 4. "run a new job" actually switches to the new job -------------------
 const oldJob = await shownJobId(page);
+// P4.3: the peak the monitor is showing right now is what the picker's hint has
+// to quote after the reset. Captured from the rendered table, not from the API,
+// because agreeing with the *screen* is the claim -- the two are formatted by
+// the same helper precisely so they cannot drift.
+const shownPeak = ((await bodyText(page)).match(
+    /Max Memory Usage\s*([\d.]+\s*[KMG]?B)/
+) || [])[1];
 await resetToRunner(page);
+
+const hint = await page
+    .locator('.previous-run')
+    .innerText()
+    .catch(() => null);
+check('the picker quotes the last run once the form is back', Boolean(hint), hint);
+check('the hint reads the peak the monitor showed',
+    Boolean(shownPeak && hint && hint.includes(shownPeak.trim())),
+    `monitor "${shownPeak}" vs hint "${hint}"`);
+check('the peak is given as a fraction of what was allowed',
+    Boolean(hint && /of the [\d.]+\s*[KMG]?B it was allowed \((<1|\d+)%\)/.test(hint)), hint);
+
 const sub2 = await submitJob(page);
 check('second submit accepted', sub2.status === 200 && sub2.id !== oldJob, `id=${sub2.id}`);
 

@@ -15,11 +15,14 @@
         getGirderUrl,
         fetchPerformanceMetrics,
         deleteSubmission,
+        containerMemoryLimit,
         type Folder,
         type JobDetails,
         type PerformanceMetrics,
+        type PreviousRunMemory,
         type WorkflowStage,
     } from "./api";
+    import { formatBytes } from "./format";
     import JobRunner from "./JobRunner.svelte";
 
     const dispatch = createEventDispatcher();
@@ -75,6 +78,9 @@
 
     // Delete submission state
     let isDeletingSubmission = false;
+
+    /** Evidence for the picker: what the run the user just left came to. */
+    let previousRun: PreviousRunMemory | null = null;
 
     $: showRunner =
         !isMonitoring &&
@@ -519,6 +525,8 @@
     }
 
     function resetJob() {
+        // Before the clears below, which drop the metrics this reads.
+        previousRun = summarisePreviousRun();
         stopPolling();
         disconnectFromLogs();
         jobDetails = null;
@@ -764,15 +772,38 @@
         }
     }
 
-    function formatBytes(bytes: number | undefined): string {
-        if (bytes === undefined || Number.isNaN(bytes)) return "N/A";
-        if (bytes === 0) return "0 B";
-        const k = 1024;
-        const sizes = ["B", "KB", "MB", "GB"];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return (
-            Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+    /**
+     * The peak memory and the cap of the run the user is leaving, kept for the
+     * picker's evidence hint (S5 guard 1).
+     *
+     * Captured in resetJob(), because that is the only moment both facts are in
+     * hand: the runner form is shown *because* the monitor was reset, and the
+     * reset clears the metrics. Re-fetching them from JobRunner instead would
+     * mean three more API calls and a second copy of loadPerformanceMetrics.
+     *
+     * Deliberately not carried over when the run being left has no metrics --
+     * a deleted submission, or one that died before Docker emitted a reading.
+     * Showing the run *before* last while the user was just looking at a
+     * different one would be worse than showing nothing.
+     */
+    function summarisePreviousRun(): PreviousRunMemory | null {
+        const peaks = performanceMetrics
+            .map((metric) => metric.data.MaxMemoryUsage)
+            .filter((peak): peak is number => typeof peak === "number");
+        if (peaks.length === 0) {
+            return null;
+        }
+        // One submission runs on one machine, so the binding figure is the
+        // worst stage, not the last one.
+        const worst = performanceMetrics.reduce((acc, metric) =>
+            (metric.data.MaxMemoryUsage ?? -1) > (acc.data.MaxMemoryUsage ?? -1)
+                ? metric
+                : acc,
         );
+        return {
+            peakBytes: Math.max(...peaks),
+            limitBytes: containerMemoryLimit(worst.data),
+        };
     }
 
     function formatDuration(
@@ -842,7 +873,7 @@
     <div class="monitor-content">
         {#if showRunner}
             <!-- Display new JobRunner form if no active job -->
-            <JobRunner on:jobsubmitted={handleJobSubmitted} />
+            <JobRunner {previousRun} on:jobsubmitted={handleJobSubmitted} />
         {:else if jobDetails}
             <!-- Display job details and status -->
             <div class="job-details-card">

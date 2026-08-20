@@ -6,9 +6,11 @@
         getImages,
         getWorkerSizes,
         type ApiError,
+        type PreviousRunMemory,
         type WorkerSize,
         type WorkflowDefinition,
     } from "./api";
+    import { formatBytes } from "./format";
     import FileUploader from "./FileUploader.svelte";
     import WorkflowImport from "./WorkflowImport.svelte";
     import { hasInvalidOrcidEmail, user } from "./stores";
@@ -132,6 +134,45 @@
             (size.gated && !size.selectable ? " (by request)" : "")
         );
     }
+
+    /**
+     * What the previous run's memory came to, handed down by JobMonitor, or null
+     * when there is nothing to say (S5 guard 1).
+     *
+     * Best-effort by design: submissions are deleted on request and after the
+     * retention window, a run can die before Docker emits a stats reading, and a
+     * first-time user has no previous run at all. Every one of those is a normal
+     * state, not an error, so the hint simply does not render.
+     * @type {PreviousRunMemory | null}
+     */
+    export let previousRun: PreviousRunMemory | null = null;
+
+    // Only meaningful against the cap that run was actually given: on a fleet
+    // where the requested rung and the booted flavour can differ, a percentage
+    // of what was *asked for* would be a different, less useful number.
+    $: previousRunPercent =
+        previousRun && previousRun.limitBytes
+            ? (previousRun.peakBytes / previousRun.limitBytes) * 100
+            : null;
+    // 85% is close enough that the next run's slightly larger dataset is the
+    // one that gets OOM-killed; under 25% the rung below would have held it.
+    // Only ever a suggestion: for MATLAB in particular the peak can land in a
+    // stage other than the one that asked for the memory, because zeros() does
+    // not commit until something writes (worker_sizing_plan.md item 11).
+    $: previousRunAdvice =
+        previousRunPercent === null
+            ? null
+            : previousRunPercent >= 85
+              ? "That was close to the limit — the next size up may be safer."
+              : previousRunPercent <= 25 &&
+                  workerSizes.some(
+                      (size) =>
+                          size.selectable &&
+                          selectedMemoryGb !== null &&
+                          size.memory_gb < selectedMemoryGb,
+                  )
+                ? "A smaller size would have been enough."
+                : null;
 
     const dispatch = createEventDispatcher();
 
@@ -786,6 +827,45 @@
                                 >.
                             {/if}
                         </div>
+                        <!-- S5 guard 1: the choice should be evidence-led, and
+                             the platform already measured the evidence. Absent
+                             far more often than not -- no previous run, or one
+                             already deleted -- so it is additive, never a gap
+                             in the layout. -->
+                        {#if previousRun}
+                            <div class="input-hint previous-run" role="note">
+                                <span
+                                    class="material-icons hint-icon"
+                                    aria-hidden="true">history</span
+                                >
+                                <span>
+                                    Your last run peaked at
+                                    <strong
+                                        >{formatBytes(
+                                            previousRun.peakBytes,
+                                        )}</strong
+                                    >
+                                    {#if previousRunPercent !== null}
+                                        of the {formatBytes(
+                                            previousRun.limitBytes ?? undefined,
+                                        )} it was allowed ({previousRunPercent <
+                                        1
+                                            ? "<1"
+                                            : Math.round(
+                                                  previousRunPercent,
+                                              )}%).
+                                    {:else}
+                                        <!-- A standalone sentence, not a
+                                             continuation: the whitespace
+                                             between markup nodes renders as a
+                                             space, so a leading comma here
+                                             comes out as "42.68 MB , which". -->
+                                        and was not capped.
+                                    {/if}
+                                    {previousRunAdvice ?? ""}
+                                </span>
+                            </div>
+                        {/if}
                     </div>
                 </div>
             {/if}
@@ -1601,6 +1681,21 @@
        over the select. */
     .resources-body .input-hint {
         margin: var(--md-spacing-sm) 0 0 0;
+    }
+
+    /* Set apart from the static hint above it: this line is about *your* last
+       run, and reading as a second sentence of the generic copy would bury it. */
+    .previous-run {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        padding-top: var(--md-spacing-sm);
+        border-top: 1px solid var(--md-outline-variant, #cac4d0);
+    }
+
+    .previous-run .hint-icon {
+        font-size: 1rem;
+        color: var(--md-primary-dark, #1565c0);
     }
 
     .secrets-section {

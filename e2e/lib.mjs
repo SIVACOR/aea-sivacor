@@ -199,6 +199,12 @@ export async function open({ headless = true, probe = true, token: asToken } = {
     const browser = await chromium.launch({
         headless,
         ...(CHROME ? { executablePath: CHROME } : {}),
+        // The dev stack's certificate is not in the system trust store.
+        // `ignoreHTTPSErrors` on the context covers it most of the time, but a
+        // real Chrome (as opposed to playwright's bundled build) intermittently
+        // fails the very first navigation with ERR_CERT_VERIFIER_CHANGED, which
+        // no context option can catch because it happens below that layer.
+        args: ['--ignore-certificate-errors'],
     });
     const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
     if (probe) await ctx.addInitScript(PROBE_INIT);
