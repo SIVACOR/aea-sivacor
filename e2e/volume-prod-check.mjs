@@ -150,23 +150,42 @@ note(`ceiling=${CEILING} GB, granularity=${GRAN} GB, edge=${AT_EDGE}->${CEILING}
 // the only identification this check has of the running `wt_submit` image -- the
 // digest itself needs `docker service inspect` on the manager.
 
+// **The root HTML does not name the route chunks**, and assuming it did made the
+// first production run of this file print "no immutable bundle served (dev
+// server?)" about production -- a wrong inference, stated confidently, about the
+// one deployment this file exists to check. SvelteKit's shell references only
+// `entry/app.*.js` and `entry/start.*.js`; the `nodes/N.*.js` chunk holding the
+// form is imported from inside the entry chunk. So follow it one hop.
 const html = await (await fetch(`${UI}/`)).text();
-const bundles = [...html.matchAll(/_app\/immutable\/nodes\/([\w.]+\.js)/g)].map((m) => m[1]);
+const seeds = [...html.matchAll(/_app\/immutable\/[\w./-]+\.js/g)].map((m) => m[0]);
+const chunks = new Set(seeds);
+for (const seed of seeds) {
+    const js = await (await fetch(`${UI}/${seed}`)).text();
+    for (const m of js.matchAll(/nodes\/[\w.-]+\.js/g)) {
+        chunks.add(`_app/immutable/${m[0]}`);
+    }
+}
 let served = null;
-for (const b of bundles) {
-    const js = await (await fetch(`${UI}/_app/immutable/nodes/${b}`)).text();
-    if (js.includes('scratch-disk-input')) served = { name: b, js };
+for (const path of chunks) {
+    const js = await (await fetch(`${UI}/${path}`)).text();
+    if (js.includes('scratch-disk-input')) served = { name: path, js };
 }
 // A vite dev server serves modules rather than an immutable bundle, so on
 // deploy-dev there is nothing to hash-identify. Skipped rather than failed: this
 // leg is about what production shipped, and the dry run has no equivalent.
-if (!bundles.length) {
-    note('no immutable bundle served (dev server?) -- bundle identification skipped');
+if (!seeds.length) {
+    note('no immutable bundle served (dev server) -- bundle identification skipped');
 } else {
-    check('the deployed bundle carries the disk control', Boolean(served), bundles.join(' '));
+    check(
+        'the deployed bundle carries the disk control',
+        Boolean(served),
+        `${chunks.size} chunks searched`
+    );
 }
 if (served) {
-    note(`bundle: _app/immutable/nodes/${served.name}`);
+    // The only identification this check has of the running wt_submit image: the
+    // digest needs `docker service inspect` on the manager.
+    note(`bundle: ${served.name}`);
     const strings = [
         'scratch-disk-input',
         'Extra Scratch Disk',
