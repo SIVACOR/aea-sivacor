@@ -33,6 +33,7 @@ node e2e/monitor.mjs          # JobMonitor lifecycle: polling, refresh recovery,
 node e2e/runner.mjs           # JobRunner form: workflow-import panel, drop-zone hit areas
 node e2e/workflow-export.mjs  # export a run's workflow definition and re-import it
 node e2e/volume-disk.mjs      # C4: the extra-scratch-disk control, as a non-admin
+node e2e/volume-evidence.mjs  # C4: the peak-workspace hint and the disk_gb round trip
 ```
 
 All of them exit non-zero on failure.
@@ -46,6 +47,17 @@ disabled control as everybody else and the approved half of the scenario cannot
 be reached as one. It also cancels the submissions it makes — under targeted
 assignment nothing consumes them on a stack with no fleet controller, and one
 left RUNNING blocks that account's next submission with a 409.
+
+`volume-evidence.mjs` is the half that needs a **finished** run, which is why it
+is a separate file: asking for disk requires targeted assignment, and under that
+flag nothing on a controller-less stack ever publishes the chain, so a submission
+that asks for a volume can never complete here. It therefore runs an ordinary
+submission — whose `MaxDiskUsage` is real, and is what the hint quotes — and
+writes `meta.requested_disk_gb` onto that finished submission folder to exercise
+the export. It removes the key afterwards by PUTting **null without
+`allowNull=true`**; passing that parameter makes Girder *store* the null instead
+of deleting the key, which is how the first run of this scenario left its own
+test data behind.
 
 To A/B a suspected regression:
 
