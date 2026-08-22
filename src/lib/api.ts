@@ -73,6 +73,13 @@ export interface PerformanceMetrics {
     DockerRunArgs?: string;
     /** The rung the submission asked for. Absent on runs from before P1. */
     RequestedMemoryGB?: number | null;
+    /**
+     * Peak *workspace* bytes for this stage -- the extracted package as it grew,
+     * not the analysis image that had to be on the machine first. The backend
+     * keeps the two apart deliberately (lib.py): a Stata image alone is several
+     * GiB, so a sum would make every Stata run look like a storage hog.
+     */
+    MaxDiskUsage?: number;
     [key: string]: unknown;
 }
 
@@ -103,15 +110,24 @@ export function containerMemoryLimit(metrics: PerformanceMetrics): number | null
 }
 
 /**
- * What the previous submission's memory actually came to, as the picker's
- * evidence (S5 guard 1). Best-effort by construction: submissions are deleted
- * after the retention window, so this is often simply absent.
+ * What the previous submission actually came to, as the resource controls'
+ * evidence (S5 guard 1, and C4 reuses it for disk). Best-effort by
+ * construction: submissions are deleted after the retention window, so this is
+ * often simply absent.
+ *
+ * Every field is independently nullable and the type is named for peaks rather
+ * than for memory, because the two measurements do not arrive together:
+ * `MaxDiskUsage` is written on every run, while the memory figures come from a
+ * Docker stats CSV that a run can die before producing. A run with disk and no
+ * memory is therefore an ordinary state, and each hint renders on its own.
  */
-export interface PreviousRunMemory {
-    /** The highest peak across the run's stages -- one submission, one machine. */
-    peakBytes: number;
-    /** The cap that run was given, when it can be recovered. */
+export interface PreviousRunPeaks {
+    /** The highest memory peak across the run's stages -- one submission, one machine. */
+    peakBytes: number | null;
+    /** The memory cap that run was given, when it can be recovered. */
     limitBytes: number | null;
+    /** The highest peak *workspace* across the run's stages. */
+    peakDiskBytes: number | null;
 }
 
 interface JobStageConfig {
@@ -148,6 +164,15 @@ export interface WorkflowStage {
  */
 export interface WorkflowResources {
     memory_gb?: number;
+    /**
+     * Extra scratch disk, in whole GB, for the workspace this submission grows.
+     *
+     * **Absent means no volume**, which is every submission by default and is
+     * deliberately distinct from 0: the absent case takes a server path with no
+     * Cinder call in it at all (V1). So this field is omitted, never sent as
+     * null or zero, when nothing was asked for.
+     */
+    disk_gb?: number;
 }
 
 /**
@@ -182,6 +207,101 @@ export interface WorkerSizeCatalogue {
     sizes: WorkerSize[];
     /** What a submission gets when it asks for nothing: the smallest ungated rung. */
     default: number | null;
+}
+
+/**
+ * The caller's own scratch-volume allowance, as GET /sivacor/volume_quota
+ * reports it.
+ *
+ * Three separate numbers because the server refuses for three separate reasons
+ * and they read very differently to a researcher: `enabled` false is *not
+ * offered here*, `max_gb` 0 is *not approved yet* (the default for every
+ * account, so an ordinary answer rather than an error), and a `deployment_gb`
+ * smaller than what was asked for is a *capacity* problem the researcher can do
+ * nothing about. Collapsing them would send an approved user to ask for access
+ * they already have.
+ *
+ * `granularity_gb` matters to the client, not just to the operator: the server
+ * rounds a request *up* to a multiple of it **before** checking it against
+ * `max_gb`, so a client that does not round the same way can offer a value it
+ * will then be refused for.
+ */
+export interface VolumeQuota {
+    enabled: boolean;
+    max_gb: number;
+    granularity_gb: number;
+    deployment_gb: number;
+}
+
+/**
+ * What a request of `gb` would actually be granted, in GB.
+ *
+ * Rounds *up*, like the server, so the researcher never gets less than they
+ * asked for -- and so a request is checked against the ceiling as the figure it
+ * will become, not as the one that was typed. Doing this the other way round is
+ * how 199 GB gets accepted against a 195 GB ceiling and then granted 200.
+ */
+export function grantedVolumeGb(quota: VolumeQuota, gb: number): number {
+    const step = quota.granularity_gb > 0 ? quota.granularity_gb : 1;
+    return Math.ceil(gb / step) * step;
+}
+
+/**
+ * The largest request this caller could actually have granted, or 0 for none.
+ *
+ * The *minimum* of their own ceiling and the deployment's reservation, because
+ * submit_job checks both independently and either can refuse. Offering the
+ * larger of the two would put a value in the control that the server rejects.
+ */
+export function volumeCeilingGb(quota: VolumeQuota | null): number {
+    if (!quota || !quota.enabled) return 0;
+    return Math.max(0, Math.min(quota.max_gb, quota.deployment_gb));
+}
+
+/**
+ * Why a disk request cannot be honoured, in the researcher's words, or null when
+ * it can be.
+ *
+ * One implementation for the form's pre-submit guard and the importer's file
+ * check, deliberately: they are the same four refusals, and two copies of them
+ * would eventually disagree in front of the same user. Each message mirrors the
+ * server's own (rest.resolve_volume_gb) rather than paraphrasing it, so being
+ * refused here and being refused there read the same.
+ *
+ * Returns null when `quota` is null -- an unknown quota is not a refusal. This
+ * build can meet a Girder that predates the endpoint, and in that case the
+ * server is the only thing that can rule on the request.
+ */
+export function volumeRefusal(quota: VolumeQuota | null, gb: number | null): string | null {
+    if (gb === null || quota === null) return null;
+    if (!Number.isInteger(gb) || gb <= 0) {
+        return 'Extra scratch disk must be a whole number of gigabytes, or left empty for none.';
+    }
+    if (!quota.enabled) {
+        return 'Extra scratch disk is not available on this deployment.';
+    }
+    if (quota.max_gb <= 0) {
+        return 'Extra scratch disk needs approval. Contact support@sivacor.org to request it.';
+    }
+    const granted = grantedVolumeGb(quota, gb);
+    if (granted > quota.max_gb) {
+        return (
+            `${gb} GB of extra scratch disk is more than your ${quota.max_gb} GB ` +
+            `limit. Ask for ${quota.max_gb} GB or less, or contact ` +
+            'support@sivacor.org to raise it.'
+        );
+    }
+    if (granted > quota.deployment_gb) {
+        // A capacity message, not a permissions one: this user *is* approved for
+        // the size they asked for and the deployment is what cannot supply it,
+        // so telling them to request access would send them to ask for
+        // something they already have.
+        return (
+            `${gb} GB of extra scratch disk is more than this deployment currently ` +
+            `has available (${quota.deployment_gb} GB). Contact support@sivacor.org.`
+        );
+    }
+    return null;
 }
 
 // API Base URL from environment variable with fallback for development
@@ -682,6 +802,39 @@ export async function getWorkerSizes(): Promise<WorkerSizeCatalogue> {
 }
 
 /**
+ * Fetches the caller's own scratch-volume allowance, or null when this Girder
+ * cannot say.
+ *
+ * Null rather than a thrown error, and null rather than a zeroed quota: the UI
+ * and the API are separate deployments, so this build can meet a Girder that
+ * predates the endpoint entirely. A zeroed quota would render the control as
+ * *not approved*, which advertises a feature that server has never heard of;
+ * null renders no control at all, which is exactly what the form did before C4.
+ *
+ * Every field is defaulted, because a partial answer from a newer or older
+ * server must not produce `NaN` in an input's `max`.
+ * @returns {Promise<VolumeQuota | null>} The allowance, or null if unavailable.
+ */
+export async function getVolumeQuota(): Promise<VolumeQuota | null> {
+    try {
+        const response = await api<VolumeQuota>('/sivacor/volume_quota');
+        if (!response) return null;
+        return {
+            enabled: response.enabled === true,
+            max_gb: Number(response.max_gb) || 0,
+            // Falling back to 1 GB, i.e. no rounding, rather than to a guess: a
+            // client that rounds to a step the server does not use would refuse
+            // values the server would have accepted.
+            granularity_gb: Number(response.granularity_gb) || 1,
+            deployment_gb: Number(response.deployment_gb) || 0,
+        };
+    } catch (error) {
+        console.warn('Could not load the scratch-volume quota:', error);
+        return null;
+    }
+}
+
+/**
  * Fetches Girder's public (unauthenticated) settings, which SIVACOR extends
  * with the maintenance-banner settings (`sivacor.banner_enabled`,
  * `sivacor.banner_message`). Works without a valid auth token.
@@ -747,9 +900,13 @@ export function getFileDownloadUrl(fileId: string): string {
  *   the server's default. Omitted from the body entirely when null: the schema
  *   types memory_gb as an integer, so a null would be rejected, and "absent"
  *   is what every submission sent before there was anything to pick.
+ * @param {number | null} diskGb - Extra scratch disk in GB, or null for none.
+ *   Omitted when null for a stronger reason than memory's: on the server,
+ *   absent is the only value that takes a path with no Cinder call in it, so
+ *   sending 0 or null here would turn "no volume" into a refusal (V1).
  * @returns {Promise<any>} The response object from the job creation endpoint.
  */
-export async function submitJob(fileId: string, config: JobStageConfig[], jobSecrets: Record<string, string> = {}, memoryGb: number | null = null): Promise<JobDetails> {
+export async function submitJob(fileId: string, config: JobStageConfig[], jobSecrets: Record<string, string> = {}, memoryGb: number | null = null, diskGb: number | null = null): Promise<JobDetails> {
     const endpoint = `/sivacor/submit_job`;
 
     // translate config object to match expected API format
@@ -765,13 +922,23 @@ export async function submitJob(fileId: string, config: JobStageConfig[], jobSec
     // Convert map to list of {"name": "...", "value": "..."} objects
     const secretsList = Object.entries(jobSecrets).map(([key, value]) => ({ key, value }));
 
+    // One `resources` object holding whichever halves were asked for, and the
+    // key itself absent when neither was: the two fields are independent -- a
+    // submission can name a size and no disk, or disk and no size -- so this
+    // cannot be two spread expressions, the second of which would overwrite the
+    // first's `resources`.
+    const resources: WorkflowResources = {
+        ...(memoryGb === null ? {} : { memory_gb: memoryGb }),
+        ...(diskGb === null ? {} : { disk_gb: diskGb }),
+    };
+
     // Send file ID as query param (non-sensitive) but stages+secrets in POST body
     const response = await api<JobDetails>(`${endpoint}?id=${encodeURIComponent(fileId)}`, {
         method: 'POST',
         body: JSON.stringify({
             stages: transformedConfig,
             env_secrets: secretsList,
-            ...(memoryGb === null ? {} : { resources: { memory_gb: memoryGb } }),
+            ...(Object.keys(resources).length === 0 ? {} : { resources }),
         }),
     });
 

@@ -4,9 +4,14 @@
     import {
         submitJob,
         getImages,
+        getVolumeQuota,
         getWorkerSizes,
+        grantedVolumeGb,
+        volumeCeilingGb,
+        volumeRefusal,
         type ApiError,
-        type PreviousRunMemory,
+        type PreviousRunPeaks,
+        type VolumeQuota,
         type WorkerSize,
         type WorkflowDefinition,
     } from "./api";
@@ -102,6 +107,58 @@
     /** @type {number | null} */
     let selectedMemoryGb: number | null = null;
 
+    /**
+     * Extra scratch disk for this submission, and what this caller may ask for.
+     *
+     * `requestedDiskGb` is `null` for *no volume*, which is the default for
+     * every submission and is deliberately not `0`: absent is the only value the
+     * server treats as "take the path with no Cinder call in it" (V1), so the
+     * empty control has to send nothing rather than a zero.
+     *
+     * **Deliberately not remembered between submissions**, unlike the worker
+     * size. A volume spends a scarce shared quota -- eight of them exist across
+     * the whole deployment, and their gigabytes come out of the same reservation
+     * as production's assetstore -- so a remembered 100 GB silently attached to
+     * the next small submission is escalation by default. Asking for extra disk
+     * stays a deliberate act each time, which is also what keeps "off by
+     * default" true of the form and not just of the server.
+     * @type {number | null}
+     */
+    let requestedDiskGb: number | null = null;
+    /** @type {VolumeQuota | null} */
+    let volumeQuota: VolumeQuota | null = null;
+
+    // The control renders whenever the *deployment* offers volumes, including
+    // for the common case of someone not approved for one -- disabled, and
+    // labelled with how to ask (item 8). It advertises a capability most users
+    // will never need, knowingly: the alternative is discovering it from an
+    // out_of_disk failure after a long run, which is learning it the expensive
+    // way. A deployment with the feature off shows nothing at all, because there
+    // the answer is not "ask us" but "not here".
+    $: showVolumeControl = volumeQuota?.enabled === true;
+    // The most this caller could actually be granted: their own ceiling and the
+    // deployment's reservation, whichever binds. 0 means the control is
+    // read-only, for one of the two reasons below.
+    $: volumeCeiling = volumeCeilingGb(volumeQuota);
+    $: volumeAwaitingApproval = showVolumeControl && (volumeQuota?.max_gb ?? 0) <= 0;
+    // Approved, but the deployment has nothing budgeted. A capacity state, not a
+    // permissions one, and it has to read differently: telling an approved user
+    // to request access sends them to ask for what they already have.
+    $: volumeUnfunded =
+        showVolumeControl &&
+        (volumeQuota?.max_gb ?? 0) > 0 &&
+        (volumeQuota?.deployment_gb ?? 0) <= 0;
+    // What the server would actually create, which is a rounded-up multiple of
+    // the granularity it reports. Shown whenever it differs from the request, so
+    // the number in the form is never a surprise on the invoice.
+    $: volumeGrantedGb =
+        volumeQuota && requestedDiskGb !== null && requestedDiskGb > 0
+            ? grantedVolumeGb(volumeQuota, requestedDiskGb)
+            : null;
+    // Live, so the reason appears while the number is still being typed rather
+    // than only after a rejected submit.
+    $: volumeProblem = volumeRefusal(volumeQuota, requestedDiskGb);
+
     /** How much of a rung's RAM the analysis actually gets, per S1 property 3. */
     const MEMORY_HEADROOM_GB = 2;
     /** Flat across the whole ladder: a bigger worker buys no more disk (D6). */
@@ -143,15 +200,15 @@
      * retention window, a run can die before Docker emits a stats reading, and a
      * first-time user has no previous run at all. Every one of those is a normal
      * state, not an error, so the hint simply does not render.
-     * @type {PreviousRunMemory | null}
+     * @type {PreviousRunPeaks | null}
      */
-    export let previousRun: PreviousRunMemory | null = null;
+    export let previousRun: PreviousRunPeaks | null = null;
 
     // Only meaningful against the cap that run was actually given: on a fleet
     // where the requested rung and the booted flavour can differ, a percentage
     // of what was *asked for* would be a different, less useful number.
     $: previousRunPercent =
-        previousRun && previousRun.limitBytes
+        previousRun?.peakBytes && previousRun.limitBytes
             ? (previousRun.peakBytes / previousRun.limitBytes) * 100
             : null;
     // 85% is close enough that the next run's slightly larger dataset is the
@@ -173,6 +230,28 @@
                   )
                 ? "A smaller size would have been enough."
                 : null;
+
+    /**
+     * Roughly what a worker's own disk leaves for a workspace, in bytes.
+     *
+     * The root disk is ROOT_DISK_GB for every rung, of which the boot image and
+     * the analysis image take a share that depends on the image -- a cold dynare
+     * pull is ~15 GB, a Stata one under a gigabyte. So this is a *ceiling* on
+     * what fits without a volume, not a promise, and it is only ever used to
+     * decide whether to suggest asking for disk.
+     */
+    const ROOT_DISK_WORKSPACE_BYTES = 45 * 1024 ** 3;
+
+    // The same evidence-led argument as the memory hint (S5 guard 1, C4): the
+    // platform already measured the workspace this user's package grows, so the
+    // form can say so instead of leaving them to guess a number of gigabytes.
+    // Only a suggestion, and only when the measured peak is near what the root
+    // disk could have held -- a run that peaked at a gigabyte needs no volume
+    // and should not be nudged towards one.
+    $: previousDiskAdvice =
+        previousRun?.peakDiskBytes && previousRun.peakDiskBytes > ROOT_DISK_WORKSPACE_BYTES * 0.6
+            ? "That is close to what a worker's own disk can hold — extra scratch disk may help."
+            : null;
 
     const dispatch = createEventDispatcher();
 
@@ -284,6 +363,19 @@
         }
     }
 
+    /**
+     * Fetches this caller's scratch-volume allowance.
+     *
+     * Non-fatal and separate from everything else, for loadWorkerSizes' reason: a
+     * Girder that predates the endpoint, or a transient failure, must leave a
+     * working form behind. `volumeQuota` stays null, no control renders, and the
+     * submission asks for no disk -- which is what every submission did before
+     * this control existed.
+     */
+    async function loadVolumeQuota() {
+        volumeQuota = await getVolumeQuota();
+    }
+
     function saveWorkerSize() {
         try {
             localStorage.setItem(
@@ -306,8 +398,10 @@
 
     onMount(async () => {
         // Before the images, so `isInitializing` still covers it and settling
-        // on a remembered rung does not immediately write it back.
-        await loadWorkerSizes();
+        // on a remembered rung does not immediately write it back. In parallel
+        // with the quota: two independent reads of two different endpoints, and
+        // neither can fail the other.
+        await Promise.all([loadWorkerSizes(), loadVolumeQuota()]);
         try {
             imagesData = await getImages();
             availableImages = Object.keys(imagesData);
@@ -411,6 +505,14 @@
         // nothing, so it says nothing about the size.
         if (typeof definition.resources?.memory_gb === "number") {
             selectedMemoryGb = definition.resources.memory_gb;
+        }
+        // Same rule for disk, and the same reason for the asymmetry: WorkflowImport
+        // has already checked the request against this caller's own allowance, so
+        // anything arriving here is grantable. A file with no `disk_gb` leaves the
+        // field alone rather than clearing it -- it asked for nothing, so it says
+        // nothing about the disk.
+        if (typeof definition.resources?.disk_gb === "number") {
+            requestedDiskGb = definition.resources.disk_gb;
         }
         // A stale banner from an earlier attempt would otherwise sit under the
         // run button describing a form that no longer exists.
@@ -543,6 +645,15 @@
             }
         }
 
+        // Last, because it is the only guard whose answer depends on a server
+        // fetch: a quota that failed to load leaves volumeProblem null and the
+        // server rules on the request instead, which is the same outcome as
+        // before this control existed.
+        if (volumeProblem) {
+            await failValidation(volumeProblem);
+            return;
+        }
+
         isJobRunning = true;
         const fullImageName = `${firstEntry.selectedImage}:${firstEntry.selectedTag}`;
         jobStatusMessage = `Starting job for image: ${fullImageName} with file: ${firstEntry.executionFileName}...`;
@@ -563,6 +674,7 @@
                 validConfig,
                 jobSecrets,
                 selectedMemoryGb,
+                requestedDiskGb,
             );
             jobId = response._id || "N/A";
             jobStatusMessage = `Job successfully started! Job ID: ${jobId}`;
@@ -626,6 +738,7 @@
             <WorkflowImport
                 {imagesData}
                 {workerSizes}
+                {volumeQuota}
                 disabled={isJobRunning}
                 on:import={handleWorkflowImport}
             />
@@ -832,8 +945,15 @@
                              far more often than not -- no previous run, or one
                              already deleted -- so it is additive, never a gap
                              in the layout. -->
-                        {#if previousRun}
-                            <div class="input-hint previous-run" role="note">
+                        {#if previousRun && previousRun.peakBytes !== null}
+                            <!-- id, not just the class: there are now two of
+                                 these notes on the form, one per resource, and
+                                 `.previous-run` no longer identifies either. -->
+                            <div
+                                class="input-hint previous-run"
+                                id="previous-run-memory"
+                                role="note"
+                            >
                                 <span
                                     class="material-icons hint-icon"
                                     aria-hidden="true">history</span
@@ -842,7 +962,7 @@
                                     Your last run peaked at
                                     <strong
                                         >{formatBytes(
-                                            previousRun.peakBytes,
+                                            previousRun.peakBytes ?? undefined,
                                         )}</strong
                                     >
                                     {#if previousRunPercent !== null}
@@ -863,6 +983,127 @@
                                         and was not capped.
                                     {/if}
                                     {previousRunAdvice ?? ""}
+                                </span>
+                            </div>
+                        {/if}
+                    </div>
+                </div>
+            {/if}
+
+            <!-- Extra scratch disk. Its own section rather than a second field
+                 in the one above, so the two degrade independently: either
+                 endpoint can be missing or fail, and a form that loses the size
+                 catalogue must still be able to offer disk (and the reverse).
+                 Rendered only where the deployment offers volumes at all --
+                 where it does not, the answer is "not here" rather than "ask
+                 us", and a disabled control would say the wrong one. -->
+            {#if showVolumeControl}
+                <div
+                    class="resources-section"
+                    role="group"
+                    aria-labelledby="scratch-disk-section-title"
+                >
+                    <div class="resources-header">
+                        <span
+                            class="material-icons resources-icon"
+                            aria-hidden="true">storage</span
+                        >
+                        <span
+                            class="resources-label"
+                            id="scratch-disk-section-title"
+                        >
+                            Extra Scratch Disk{volumeAwaitingApproval
+                                ? " (by request)"
+                                : ""}
+                        </span>
+                        <span class="resources-hint">Applies to all steps</span>
+                    </div>
+                    <div class="resources-body">
+                        <label for="scratch-disk-input" class="sr-only">
+                            Extra scratch disk for this submission, in GB
+                        </label>
+                        <input
+                            id="scratch-disk-input"
+                            class="disk-input"
+                            type="number"
+                            inputmode="numeric"
+                            bind:value={requestedDiskGb}
+                            min={volumeQuota?.granularity_gb ?? 1}
+                            max={volumeCeiling || undefined}
+                            step={volumeQuota?.granularity_gb ?? 1}
+                            placeholder="None"
+                            disabled={isJobRunning || volumeCeiling === 0}
+                            aria-describedby="scratch-disk-hint"
+                            aria-invalid={volumeProblem !== null}
+                        />
+                        <span class="disk-unit" aria-hidden="true">GB</span>
+                        <div class="input-hint" id="scratch-disk-hint">
+                            {#if volumeAwaitingApproval}
+                                A scratch volume for submissions whose data will
+                                not fit a worker's own disk. It needs approval
+                                per account: email
+                                <a href="mailto:support@sivacor.org"
+                                    >support@sivacor.org</a
+                                >, saying roughly how much space your package
+                                needs.
+                            {:else if volumeUnfunded}
+                                Approved for your account, but this deployment
+                                has no space budgeted for it right now. Contact
+                                <a href="mailto:support@sivacor.org"
+                                    >support@sivacor.org</a
+                                >.
+                            {:else}
+                                Leave empty to use the worker's own {ROOT_DISK_GB}
+                                GB disk, which the analysis image shares. You may
+                                ask for up to {volumeCeiling} GB, rounded up to
+                                the nearest {volumeQuota?.granularity_gb} GB, and
+                                it is wiped when the run finishes.
+                            {/if}
+                        </div>
+                        <!-- The rounded figure, whenever it is not the one that
+                             was typed: the server rounds *before* checking the
+                             ceiling, so a researcher who asks for 95 against a
+                             100 GB allowance should see 100 here rather than
+                             discover it later. -->
+                        {#if volumeGrantedGb !== null && volumeGrantedGb !== requestedDiskGb && volumeProblem === null}
+                            <div class="input-hint" role="status">
+                                Rounds up to <strong>{volumeGrantedGb} GB</strong
+                                >.
+                            </div>
+                        {/if}
+                        {#if volumeProblem}
+                            <div class="input-hint disk-problem" role="alert">
+                                <span
+                                    class="material-icons hint-icon"
+                                    aria-hidden="true">error_outline</span
+                                >
+                                <span>{volumeProblem}</span>
+                            </div>
+                        {/if}
+                        <!-- The same evidence-led hint the size picker gets, and
+                             for the same reason: the platform measured the
+                             workspace this package grows, so the choice can be
+                             led by that instead of by guesswork. Absent far more
+                             often than not. -->
+                        {#if previousRun && previousRun.peakDiskBytes !== null}
+                            <div
+                                class="input-hint previous-run"
+                                id="previous-run-disk"
+                                role="note"
+                            >
+                                <span
+                                    class="material-icons hint-icon"
+                                    aria-hidden="true">history</span
+                                >
+                                <span>
+                                    Your last run's workspace peaked at
+                                    <strong
+                                        >{formatBytes(
+                                            previousRun.peakDiskBytes ??
+                                                undefined,
+                                        )}</strong
+                                    >.
+                                    {previousDiskAdvice ?? ""}
                                 </span>
                             </div>
                         {/if}
@@ -1681,6 +1922,48 @@
        over the select. */
     .resources-body .input-hint {
         margin: var(--md-spacing-sm) 0 0 0;
+    }
+
+    /* Narrow, and inline with its unit: a disk request is two or three digits,
+       and a full-width field would read as though a path or a filename belonged
+       in it. */
+    .disk-input {
+        width: 7rem;
+        padding: var(--md-spacing-sm);
+        border: 1px solid var(--md-outline, #79747e);
+        border-radius: var(--md-radius-xs, 4px);
+        font-size: var(--md-font-body);
+        background: var(--md-surface, #fff);
+        color: var(--md-on-surface, #1c1b1f);
+    }
+
+    .disk-input:focus {
+        outline: none;
+        border-color: var(--md-primary);
+    }
+
+    .disk-input:disabled {
+        background-color: var(--md-surface-variant);
+        color: var(--md-on-surface-variant);
+        cursor: not-allowed;
+    }
+
+    .disk-unit {
+        margin-left: 6px;
+        font-size: var(--md-font-caption);
+        color: var(--md-on-surface-variant);
+    }
+
+    .disk-problem {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        color: var(--md-error, #b3261e);
+    }
+
+    .disk-problem .hint-icon {
+        font-size: 1rem;
+        color: var(--md-error, #b3261e);
     }
 
     /* Set apart from the static hint above it: this line is about *your* last

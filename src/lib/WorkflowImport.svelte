@@ -2,6 +2,9 @@
     import { createEventDispatcher } from "svelte";
     import {
         getWorkflowSchema,
+        volumeCeilingGb,
+        volumeRefusal,
+        type VolumeQuota,
         type WorkerSize,
         type WorkflowDefinition,
         type WorkflowStage,
@@ -23,6 +26,20 @@
      * @type {WorkerSize[]}
      */
     export let workerSizes: WorkerSize[] = [];
+    /**
+     * The caller's scratch-volume allowance, as loaded by the parent, or null
+     * when this Girder cannot say.
+     *
+     * Checked here for the same reason as the images and the size catalogue --
+     * submit_job refuses a request over the ceiling, and refusing it while the
+     * file is still in front of the user is the difference between "ask for
+     * less" and a failed submission. Unlike those two, an over-cap request is
+     * something the *recipient* of a shared workflow file hits routinely: the
+     * exporter's allowance travelled with the file and their own may be smaller
+     * or absent.
+     * @type {VolumeQuota | null}
+     */
+    export let volumeQuota: VolumeQuota | null = null;
     export let disabled = false;
 
     const ALLOWED_EXTENSIONS = [".yaml", ".yml", ".json"];
@@ -42,6 +59,15 @@
      */
     $: exampleMemoryGb =
         workerSizes.find((size) => size.selectable)?.memory_gb ?? null;
+
+    /**
+     * A disk figure worth showing in the "Expected format" block, or null.
+     *
+     * Only for someone who could actually have one: printing `disk_gb` for the
+     * common case -- no approval -- documents a field whose only effect for that
+     * reader is to have their file refused.
+     */
+    $: exampleDiskGb = volumeCeilingGb(volumeQuota) || null;
 
     let isParsing = false;
     let isDragging = false;
@@ -174,6 +200,18 @@
                         "self-service. Email support@sivacor.org to request " +
                         `it, or choose one of: ${summarize(offered)}.`,
                 );
+            }
+        }
+
+        // Extra scratch disk, refused with the server's own wording (V8) rather
+        // than a paraphrase, so a file rejected here and one rejected at submit
+        // read the same. Skipped when the quota is unknown, exactly as above --
+        // then the server is the only thing that can rule on it.
+        const requestedDisk = definition.resources?.disk_gb;
+        if (requestedDisk !== undefined) {
+            const refusal = volumeRefusal(volumeQuota, requestedDisk);
+            if (refusal) {
+                problems.push(`resources: ${refusal}`);
             }
         }
 
@@ -381,18 +419,32 @@
 env_secrets:
   - key: API_TOKEN
     value: s3cret${
-        exampleMemoryGb === null
+        exampleMemoryGb === null && exampleDiskGb === null
             ? ""
             : `
-resources:
+resources:${
+    exampleMemoryGb === null
+        ? ""
+        : `
   memory_gb: ${exampleMemoryGb}`
+}${
+    exampleDiskGb === null
+        ? ""
+        : `
+  disk_gb: ${exampleDiskGb}`
+}`
     }`}</pre>
             <p>
                 <code>network_isolation</code>, <code>env_secrets</code> and
                 <code>resources</code> are optional. A file with no
-                <code>resources</code> block leaves the worker size as chosen
-                below. Secrets are read from the file into this form only — like
-                secrets typed by hand, they are never saved in your browser.
+                <code>resources</code> block leaves the worker size and disk as
+                chosen below.
+                {#if exampleDiskGb !== null}
+                    <code>disk_gb</code> asks for extra scratch disk, up to your
+                    {exampleDiskGb} GB allowance.
+                {/if}
+                Secrets are read from the file into this form only — like secrets
+                typed by hand, they are never saved in your browser.
             </p>
         </details>
 

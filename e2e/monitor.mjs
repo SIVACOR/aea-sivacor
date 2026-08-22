@@ -74,8 +74,12 @@ const shownPeak = ((await bodyText(page)).match(
 ) || [])[1];
 await resetToRunner(page);
 
+// #previous-run-memory, not `.previous-run`: the form carries one of these
+// notes per resource (memory, and disk once a deployment offers volumes), so the
+// class matches two elements and a strict-mode locator on it throws -- which the
+// catch below turns into an indistinguishable "no hint rendered".
 const hint = await page
-    .locator('.previous-run')
+    .locator('#previous-run-memory')
     .innerText()
     .catch(() => null);
 check('the picker quotes the last run once the form is back', Boolean(hint), hint);

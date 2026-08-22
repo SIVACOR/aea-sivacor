@@ -32,9 +32,20 @@ Everything here is plain ESM run directly with `node`. No test framework.
 node e2e/monitor.mjs          # JobMonitor lifecycle: polling, refresh recovery, job identity
 node e2e/runner.mjs           # JobRunner form: workflow-import panel, drop-zone hit areas
 node e2e/workflow-export.mjs  # export a run's workflow definition and re-import it
+node e2e/volume-disk.mjs      # C4: the extra-scratch-disk control, as a non-admin
 ```
 
-Both exit non-zero on failure.
+All of them exit non-zero on failure.
+
+`volume-disk.mjs` writes deployment settings (`sivacor.volumes_enabled`,
+`sivacor.volume_total_gb`, `sivacor.targeted_assignment`) and the test account's
+own ceiling, and restores every one of them in a `finally`. It has to drive
+**MEMBER, not the admin**: site admins are deliberately *not* exempt from a
+volume ceiling (unlike the worker-size group gate), so an admin sees the same
+disabled control as everybody else and the approved half of the scenario cannot
+be reached as one. It also cancels the submissions it makes — under targeted
+assignment nothing consumes them on a stack with no fleet controller, and one
+left RUNNING blocks that account's next submission with a 409.
 
 To A/B a suspected regression:
 
@@ -73,6 +84,9 @@ The runner form is uncontrolled markup, so these are the load-bearing hooks:
 | upload finished | body text `Upload Successful` |
 | image / tag | `select[id^="image-select-"]` / `select[id^="tag-select-"]` |
 | main file | `input[id^="execution-file-"]` |
+| worker size | `#worker-size-select`, hint `#worker-size-hint` |
+| extra scratch disk | `#scratch-disk-input`, hint `#scratch-disk-hint`, title `#scratch-disk-section-title` |
+| last run's peaks | `#previous-run-memory` / `#previous-run-disk` — **not** `.previous-run`, which matches both |
 | submit | `button.run-button` |
 | back to the runner | button matching `/run a new job|new job|new submission/i` |
 

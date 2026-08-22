@@ -283,6 +283,12 @@ export async function submitJob(page, opts = {}) {
         // Worker size to pick. null leaves whatever the picker defaulted to,
         // which is also the only option on a stack with a one-rung catalogue.
         memoryGb = null,
+        // Extra scratch disk to ask for. null leaves the field alone, which is
+        // "no volume" and what every submission asks for by default -- so the
+        // default here has to be null rather than 0, which the server refuses.
+        // Pass '' to clear a field an imported workflow filled in. The control
+        // is absent unless the deployment offers volumes at all.
+        diskGb = null,
     } = opts;
 
     await page.setInputFiles('#file-input', zip);
@@ -302,6 +308,12 @@ export async function submitJob(page, opts = {}) {
     // failure here.
     if (memoryGb !== null && (await page.locator('#worker-size-select').count())) {
         await page.selectOption('#worker-size-select', String(memoryGb));
+    }
+    if (diskGb !== null && (await page.locator('#scratch-disk-input').count())) {
+        // fill() rather than type(): the field may already hold an imported
+        // figure, and typing would append to it.
+        await page.fill('#scratch-disk-input', diskGb === '' ? '' : String(diskGb));
+        await page.waitForTimeout(300);
     }
 
     const responded = page.waitForResponse(

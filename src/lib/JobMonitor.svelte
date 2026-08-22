@@ -19,7 +19,7 @@
         type Folder,
         type JobDetails,
         type PerformanceMetrics,
-        type PreviousRunMemory,
+        type PreviousRunPeaks,
         type WorkflowStage,
     } from "./api";
     import { formatBytes } from "./format";
@@ -79,8 +79,8 @@
     // Delete submission state
     let isDeletingSubmission = false;
 
-    /** Evidence for the picker: what the run the user just left came to. */
-    let previousRun: PreviousRunMemory | null = null;
+    /** Evidence for the resource controls: what the run the user just left came to. */
+    let previousRun: PreviousRunPeaks | null = null;
 
     $: showRunner =
         !isMonitoring &&
@@ -112,6 +112,17 @@
     $: requestedMemoryGb =
         typeof latestSubmission?.meta?.requested_memory_gb === "number"
             ? (latestSubmission.meta.requested_memory_gb as number)
+            : null;
+
+    // The scratch volume this submission was granted, same source and same
+    // caveat. Absent on a submission that asked for nothing -- and reliably so,
+    // because Girder's metadata PUT treats a null as a *delete*, so the folder
+    // carries the key only when there was a volume (C1 as built, finding 1).
+    // That is what lets the export omit the field rather than write an explicit
+    // null a re-import would have to interpret.
+    $: requestedDiskGb =
+        typeof latestSubmission?.meta?.requested_disk_gb === "number"
+            ? (latestSubmission.meta.requested_disk_gb as number)
             : null;
 
     // File type mappings for downloadable files
@@ -373,17 +384,29 @@
             "",
         ];
 
-        // A peer of `stages`, at column 0, and only when the submission recorded
-        // a size: re-importing a file that names a rung the importer cannot have
-        // fails, so an export that never asked for one must not start asking.
-        if (requestedMemoryGb !== null) {
+        // A peer of `stages`, at column 0, and only for what the submission
+        // actually recorded: re-importing a file that names a rung the importer
+        // cannot have fails, so an export that never asked for one must not
+        // start asking. The same holds twice over for disk, which needs an
+        // approval the recipient of this file may well not have.
+        if (requestedMemoryGb !== null || requestedDiskGb !== null) {
             header.push(
-                "# The worker this ran on. Remove this block to take the",
-                "# default size instead.",
+                "# The machine this ran on. Remove this block to take the",
+                "# defaults instead.",
                 "resources:",
-                `  memory_gb: ${requestedMemoryGb}`,
-                "",
             );
+            if (requestedMemoryGb !== null) {
+                header.push(`  memory_gb: ${requestedMemoryGb}`);
+            }
+            if (requestedDiskGb !== null) {
+                header.push(
+                    `  disk_gb: ${requestedDiskGb}`,
+                    "# ^ extra scratch disk, which needs approval per account.",
+                    "#   Importing this needs your own allowance to cover it;",
+                    "#   drop the line to run on the worker's own disk.",
+                );
+            }
+            header.push("");
         }
         header.push("stages:");
 
@@ -785,24 +808,43 @@
      * a deleted submission, or one that died before Docker emitted a reading.
      * Showing the run *before* last while the user was just looking at a
      * different one would be worse than showing nothing.
+     *
+     * Memory and disk are summarised independently and either may be null: the
+     * memory figures come from a Docker stats CSV a run can die before writing,
+     * while MaxDiskUsage is written from the poll loop's own reading. So "we
+     * know the workspace but not the memory" is an ordinary outcome, and
+     * returning null for the pair would throw away the half we have.
      */
-    function summarisePreviousRun(): PreviousRunMemory | null {
-        const peaks = performanceMetrics
-            .map((metric) => metric.data.MaxMemoryUsage)
-            .filter((peak): peak is number => typeof peak === "number");
-        if (peaks.length === 0) {
+    function summarisePreviousRun(): PreviousRunPeaks | null {
+        // One submission runs on one machine, so the binding figure for each
+        // resource is its worst stage, not the last one.
+        const worstOf = (field: "MaxMemoryUsage" | "MaxDiskUsage") =>
+            performanceMetrics
+                .filter((metric) => typeof metric.data[field] === "number")
+                .reduce(
+                    (acc, metric) =>
+                        acc === null ||
+                        (metric.data[field] as number) >
+                            (acc.data[field] as number)
+                            ? metric
+                            : acc,
+                    null as (typeof performanceMetrics)[number] | null,
+                );
+
+        const worstMemory = worstOf("MaxMemoryUsage");
+        const worstDisk = worstOf("MaxDiskUsage");
+        if (worstMemory === null && worstDisk === null) {
             return null;
         }
-        // One submission runs on one machine, so the binding figure is the
-        // worst stage, not the last one.
-        const worst = performanceMetrics.reduce((acc, metric) =>
-            (metric.data.MaxMemoryUsage ?? -1) > (acc.data.MaxMemoryUsage ?? -1)
-                ? metric
-                : acc,
-        );
         return {
-            peakBytes: Math.max(...peaks),
-            limitBytes: containerMemoryLimit(worst.data),
+            peakBytes: (worstMemory?.data.MaxMemoryUsage as number) ?? null,
+            // The cap belongs to the memory peak's stage specifically: it is the
+            // limit that peak was measured against, and a different stage's
+            // limit would make the percentage meaningless.
+            limitBytes: worstMemory
+                ? containerMemoryLimit(worstMemory.data)
+                : null,
+            peakDiskBytes: (worstDisk?.data.MaxDiskUsage as number) ?? null,
         };
     }
 
