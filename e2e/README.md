@@ -34,6 +34,7 @@ node e2e/runner.mjs           # JobRunner form: workflow-import panel, drop-zone
 node e2e/workflow-export.mjs  # export a run's workflow definition and re-import it
 node e2e/volume-disk.mjs      # C4: the extra-scratch-disk control, as a non-admin
 node e2e/volume-evidence.mjs  # C4: the peak-workspace hint and the disk_gb round trip
+node e2e/upload-page.mjs      # #43: the Advanced fold, the run-button gate, the single button
 ```
 
 All of them exit non-zero on failure.
@@ -58,6 +59,39 @@ the export. It removes the key afterwards by PUTting **null without
 `allowNull=true`**; passing that parameter makes Girder *store* the null instead
 of deleting the key, which is how the first run of this scenario left its own
 test data behind.
+
+`upload-page.mjs` covers issue #43 and owns two claims nothing else asserts.
+It is the only scenario that calls `resetToRunner(page, { advanced: false })`:
+everything else lets the helper unfold the Advanced panel, because a shut
+`<details>` hides the size picker, the disk field and the secret rows from
+`innerText()` as well as from clicks. And its upload-in-flight check needs a
+fixture big enough to span more than one 5 MB chunk, so it builds a **60 MB
+incompressible zip** in `$TMPDIR/sivacor-e2e-big` (kept between runs) — the
+shared `makePackage()` fixture uploads inside a single tick, which is exactly how
+the live-button bug went unnoticed.
+
+## Two traps #43 introduced
+
+**Leaving the monitor now deletes the submission.** The plain "Run New Job"
+button is gone, so `resetToRunner()` clicks "Delete & Run New Job" and goes
+through a `confirm()` — accepted by the dialog handler `open()` installs. Two
+consequences worth knowing before writing a new scenario:
+
+- Anything that needs the submission folder *after* the form is back must happen
+  **before** the reset. `volume-evidence.mjs` reads as a worked example: its
+  metadata patch and workflow-export download were moved above the reset for
+  precisely this reason. The `previousRun` hints survive it, because `resetJob()`
+  snapshots them from the monitor's own metrics rather than from the folder.
+- Use **`reachRunner(page)`** instead where deleting is not acceptable — it gets
+  to the same form with GETs only, by deep-linking a jobId the server cannot
+  resolve (which sets the monitor's `jobUnavailable`). `volume-prod-check.mjs`
+  uses it throughout, and that is also why its item 6 is now a printed note
+  rather than a check: producing the previous-run hint requires the destructive
+  transition, and that file's contract is that it writes nothing.
+
+**`.delete-and-reset-button` is not unique.** FileUploader's "Delete Uploaded
+File" reuses the class, so an unscoped locator on it hits whichever comes first.
+Scope to the monitor's row: `.action-buttons-row button.delete-and-reset-button`.
 
 To A/B a suspected regression:
 

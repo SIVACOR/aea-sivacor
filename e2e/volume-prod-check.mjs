@@ -40,7 +40,7 @@ import path from 'path';
 // it has to be set *before* the import -- hence the dynamic import below rather
 // than a static one at the top of the file.
 process.env.SIVACOR_E2E_DOMAIN ??= 'sivacor.org';
-const { API, UI, apiGet, open, resetToRunner, sleep } = await import('./lib.mjs');
+const { API, UI, apiGet, open, reachRunner, sleep } = await import('./lib.mjs');
 
 const checks = [];
 const check = (name, ok, detail) => {
@@ -226,7 +226,11 @@ page.on('request', (req) => {
 });
 
 try {
-    await resetToRunner(page);
+    // reachRunner, NOT resetToRunner: since #43 the only control that leaves the
+    // monitor is "Delete & Run New Job", so resetToRunner would delete a real
+    // production submission -- and this file's whole contract is that it writes
+    // nothing. reachRunner gets to the same form with GETs only.
+    check('the runner form is reachable without writing anything', await reachRunner(page));
     await sleep(1500);
 
     // -- 1: the control, enabled, empty, bounded ------------------------------
@@ -431,38 +435,25 @@ try {
         note('no finished run without a volume on this account -- item 5b not exercised');
     }
 
-    // -- 6: the peak-workspace hint, back on the form ------------------------
-    // The hint is summarised from the run just viewed, not fetched from history,
-    // so it only exists on the way back from a finished run -- which is why this
-    // is the last item and not the first.
+    // -- 6: the peak-workspace hint -- NOT exercised here, deliberately ------
+    // The hint is summarised from the run being left, so it only exists on the
+    // way back from a finished submission. Before #43 that transition was the
+    // free "Run New Job" button; it is now "Delete & Run New Job", so producing
+    // the hint on production would cost a real researcher's submission. That is
+    // not a trade this file may make -- it asserts below that it wrote nothing --
+    // so the hint is covered on the dev stack instead, by
+    // `volume-evidence.mjs`, which owns a submission it is allowed to destroy.
     const viewed = withoutVolume ?? withVolume;
     if (viewed) {
         const expected = await peakDiskOf(viewed.folder._id);
-        await page.goto(`${UI}/?jobId=${viewed.job._id}`, { waitUntil: 'networkidle' });
-        await sleep(4000);
-        await resetToRunner(page);
-        await sleep(1500);
-        const diskNote = await page
-            .locator('#previous-run-disk')
-            .innerText()
-            .catch(() => null);
-        check('the form quotes the last run\'s peak workspace', Boolean(diskNote), diskNote);
-        check(
-            '...at the figure that run actually recorded',
-            Boolean(expected !== null && diskNote && diskNote.includes(formatBytes(expected))),
-            `hint "${(diskNote ?? 'null').replace(/\s+/g, ' ')}" vs MaxDiskUsage ${formatBytes(expected)}`
+        note(
+            `item 6 not exercised on production: reaching the hint now deletes a ` +
+                `submission. The run it would quote is ${viewed.job._id}, whose peak ` +
+                `workspace is ${formatBytes(expected)} -- check that figure by hand if ` +
+                `the hint is what you are here for.`
         );
-        const memoryNote = await page
-            .locator('#previous-run-memory')
-            .innerText()
-            .catch(() => null);
-        // Two `.previous-run` notes on one form is the state that broke
-        // monitor.mjs's strict-mode selector, so assert it rather than avoid it.
-        check(
-            'the memory hint is still beside it, and the two are distinct',
-            Boolean(memoryNote) && memoryNote !== diskNote,
-            `${(memoryNote ?? 'null').slice(0, 50)} | ${(diskNote ?? 'null').slice(0, 50)}`
-        );
+    } else {
+        note('item 6 not exercised: no finished run to quote either');
     }
 } finally {
     check(

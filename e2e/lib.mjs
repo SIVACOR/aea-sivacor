@@ -210,6 +210,14 @@ export async function open({ headless = true, probe = true, token: asToken } = {
     if (probe) await ctx.addInitScript(PROBE_INIT);
     const page = await ctx.newPage();
     page.on('pageerror', (e) => console.log('[pageerror]', String(e).slice(0, 300)));
+    // Playwright's default is to *dismiss* dialogs, which since #43 silently
+    // breaks every scenario: leaving the monitor now goes through
+    // handleDeleteAndReset's confirm(), and a dismissed confirm is a no-op, so
+    // resetToRunner would appear to click and land nowhere.
+    page.on('dialog', (d) => {
+        console.log(`[dialog:${d.type()}] ${d.message().slice(0, 120)}`);
+        d.accept().catch(() => {});
+    });
     // ?girderToken= is how the app receives auth post-OAuth; it sticks as a cookie.
     await page.goto(`${UI}/?girderToken=${token}`, { waitUntil: 'networkidle', timeout: 120000 });
     await page.waitForTimeout(2500);
@@ -250,20 +258,90 @@ export async function waitTerminal(page, timeoutMs = 600000) {
 }
 
 /** The runner form only exists once the monitor is reset (or on a fresh account). */
-export async function resetToRunner(page) {
-    // Class, not text: the same control reads "Run New Job" after a success and
-    // "Try Again" after a failure, and matching on wording silently no-ops on
-    // the error path -- leaving you on the monitor wondering where the form went.
-    let b = page.locator('button.new-job-button').first();
+export async function resetToRunner(page, { advanced = true } = {}) {
+    // Class, not text: the same control reads "Delete & Run New Job" after a
+    // success and "Delete & Try Again" after a failure, and matching on wording
+    // silently no-ops on the error path -- leaving you on the monitor wondering
+    // where the form went.
+    //
+    // Since #43 this is the *only* way off the monitor: the plain "Run New Job"
+    // button beside it is gone, so leaving now deletes the submission and goes
+    // through a confirm(). The `open()` dialog handler accepts it; the
+    // .new-job-button fallback is kept for an older UI (deploy-dev bind-mounts
+    // this tree, but volume-prod-check drives production).
+    // Scoped to the monitor's own row, NOT a bare `.delete-and-reset-button`:
+    // FileUploader's "Delete Uploaded File" reuses that class, so an unscoped
+    // locator matches it whenever the form is already showing with a file
+    // staged -- and this helper would throw away the upload it was called to
+    // preserve.
+    let b = page.locator('.action-buttons-row button.delete-and-reset-button').first();
+    if (!(await b.count())) b = page.locator('button.new-job-button').first();
     if (!(await b.count())) {
         b = page.locator('button', { hasText: /run a new job|new job|new submission/i }).first();
     }
     if (await b.count()) {
         await b.scrollIntoViewIfNeeded();
         await b.click();
-        await page.waitForTimeout(1200);
+        // Longer than the old flat 1200ms: this click now waits on a DELETE of
+        // the whole submission folder before the form appears.
+        await page.waitForSelector('#file-input', { timeout: 30000 }).catch(() => {});
+        await page.waitForTimeout(600);
     }
+    // Unfold by default, so every scenario written before #43 still reaches the
+    // size picker, the disk field and the secret rows without being edited.
+    // Pass `{ advanced: false }` to assert the folded state itself -- which is
+    // upload-page.mjs's job, and only its job: if every scenario asserted it,
+    // none of them could reach what is inside.
+    if (advanced) await openAdvanced(page);
     return page.locator('#file-input').count().then((n) => n > 0);
+}
+
+/**
+ * Unfold the Advanced panel, so the worker-size picker, the scratch-disk field
+ * and the secret rows are reachable.
+ *
+ * Folded by default since #43, and a closed <details> hides its contents
+ * outright -- so this is needed for *reading* them too, not just for clicking:
+ * innerText() of a hidden node comes back empty, which reads as a hint that lost
+ * its copy rather than as a panel that is shut.
+ *
+ * A no-op where there is no such panel, so scenarios that also run against an
+ * older deployment (volume-prod-check) can call it unconditionally. The fold is
+ * component state, not localStorage, so it must be re-opened after every reload.
+ */
+/**
+ * Reach the runner form WITHOUT deleting anything.
+ *
+ * Since #43 the only control that leaves the monitor is "Delete & Run New Job",
+ * so resetToRunner() is a destructive act -- fine on deploy-dev, not on
+ * production. A jobId the server cannot resolve sets the monitor's
+ * `jobUnavailable`, which is the other of the two conditions `showRunner`
+ * accepts, and gets there with GETs only.
+ *
+ * The cost is that `previousRun` is empty: the monitor snapshots that from the
+ * run being left, and this route leaves no run. A scenario that needs the
+ * previous-run hints has to go through resetToRunner() and pay for it.
+ */
+export const NO_SUCH_JOB = '0'.repeat(24);
+
+export async function reachRunner(page) {
+    await page.goto(`${UI}/?jobId=${NO_SUCH_JOB}`, {
+        waitUntil: 'networkidle',
+        timeout: 120000,
+    });
+    await page.waitForTimeout(3000);
+    await openAdvanced(page);
+    return page.locator('#file-input').count().then((n) => n > 0);
+}
+
+export async function openAdvanced(page) {
+    const panel = page.locator('details.advanced-section');
+    if (!(await panel.count())) return false;
+    if ((await panel.getAttribute('open')) === null) {
+        await page.locator('summary.advanced-summary').first().click();
+        await page.waitForTimeout(300);
+    }
+    return true;
 }
 
 /**
@@ -306,6 +384,7 @@ export async function submitJob(page, opts = {}) {
     // scenario that wants a different one has to be able to say so. The picker
     // is absent when the server has no catalogue endpoint, which must not be a
     // failure here.
+    if (memoryGb !== null || diskGb !== null) await openAdvanced(page);
     if (memoryGb !== null && (await page.locator('#worker-size-select').count())) {
         await page.selectOption('#worker-size-select', String(memoryGb));
     }

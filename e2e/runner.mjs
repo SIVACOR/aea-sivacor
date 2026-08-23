@@ -11,6 +11,7 @@ import {
     getMemberToken,
     getToken,
     open,
+    openAdvanced,
     resetToRunner,
     setSetting,
     sleep,
@@ -247,6 +248,9 @@ await picker.selectOption('60');
 await sleep(400);
 await page.reload({ waitUntil: 'networkidle' });
 await sleep(2500);
+// The Advanced fold is component state, not localStorage, so a reload shuts it
+// again (#43) -- and a shut <details> hides the picker.
+await openAdvanced(page);
 check('the chosen size survives a reload',
     (await page.locator('#worker-size-select').inputValue()) === '60',
     await page.locator('#worker-size-select').inputValue());

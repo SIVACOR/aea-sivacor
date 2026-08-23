@@ -212,6 +212,11 @@
         isUploading = true;
         uploadStatus = "Initiating upload...";
         errorMessage = null;
+        // The parent needs to know an upload is in flight, not just that one
+        // finished: until this existed the run button stayed live throughout a
+        // multi-minute upload, so a submission could be sent against a file
+        // that was still only half in Girder (#43).
+        dispatch("uploadingchange", { uploading: true });
 
         try {
             // Step 1: Initiate the upload
@@ -276,6 +281,10 @@
             uploadProgress = 0; // Reset progress on failure
         } finally {
             isUploading = false;
+            // After the `uploadcomplete` above, so the parent has the file id
+            // before it is told the upload is over -- the other order would
+            // leave a beat in which nothing is in flight and nothing is staged.
+            dispatch("uploadingchange", { uploading: false });
             // Optionally clear the file input after successful or failed upload
             if (fileInput) fileInput.value = "";
             selectedFile = null;

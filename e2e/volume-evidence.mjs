@@ -179,29 +179,6 @@ try {
     check('the run recorded a peak workspace', typeof peakDisk === 'number',
         `MaxDiskUsage=${peakDisk}`);
 
-    // -- 6: the peak-workspace hint, against that real number ----------------
-    await resetToRunner(page);
-    await sleep(1200);
-    const diskNote = await page
-        .locator('#previous-run-disk')
-        .innerText()
-        .catch(() => null);
-    check('the disk hint quotes the last run', Boolean(diskNote), diskNote);
-    check('...with the peak the run actually recorded',
-        Boolean(diskNote && diskNote.includes(formatBytes(peakDisk))),
-        `hint "${diskNote}" vs MaxDiskUsage ${formatBytes(peakDisk)}`);
-    // Both notes at once is the state that broke monitor.mjs's selector, so it
-    // is worth asserting deliberately rather than only avoiding.
-    const memoryNote = await page
-        .locator('#previous-run-memory')
-        .innerText()
-        .catch(() => null);
-    check('the memory hint is still there beside it, and they are distinct',
-        Boolean(memoryNote) && memoryNote !== diskNote,
-        `${(memoryNote ?? 'null').slice(0, 60)} | ${(diskNote ?? 'null').slice(0, 60)}`);
-    check('a small workspace is not nudged towards a volume',
-        !/extra scratch disk may help/.test(diskNote ?? ''), diskNote);
-
     // -- 5: the export round trip, on a submission that "was granted" 20 GB ---
     patchedFolderId = folder._id;
     const meta = await setFolderMeta(folder._id, 'requested_disk_gb', GRANTED_GB);
@@ -239,9 +216,38 @@ try {
         /needs your own allowance/.test(yaml),
         (yaml.match(/#.*allowance.*/) || ['no warning'])[0]);
 
-    // Round-trip: the same file, back through the importer, must fill the field.
+    // -- 6: the peak-workspace hint, against that real number ----------------
+    // After the export above, deliberately. Since #43 leaving the monitor is the
+    // *delete* path -- there is no longer a "Run New Job" button that keeps the
+    // submission -- so this reset destroys `folder`, and anything that needs the
+    // folder has to have happened already. The hints survive it because
+    // resetJob() snapshots them from the monitor's own metrics before clearing,
+    // not from the folder.
     await resetToRunner(page);
-    await sleep(1000);
+    await sleep(1200);
+    const diskNote = await page
+        .locator('#previous-run-disk')
+        .innerText()
+        .catch(() => null);
+    check('the disk hint quotes the last run', Boolean(diskNote), diskNote);
+    check('...with the peak the run actually recorded',
+        Boolean(diskNote && diskNote.includes(formatBytes(peakDisk))),
+        `hint "${diskNote}" vs MaxDiskUsage ${formatBytes(peakDisk)}`);
+    // Both notes at once is the state that broke monitor.mjs's selector, so it
+    // is worth asserting deliberately rather than only avoiding.
+    const memoryNote = await page
+        .locator('#previous-run-memory')
+        .innerText()
+        .catch(() => null);
+    check('the memory hint is still there beside it, and they are distinct',
+        Boolean(memoryNote) && memoryNote !== diskNote,
+        `${(memoryNote ?? 'null').slice(0, 60)} | ${(diskNote ?? 'null').slice(0, 60)}`);
+    check('a small workspace is not nudged towards a volume',
+        !/extra scratch disk may help/.test(diskNote ?? ''), diskNote);
+
+    // Round-trip: the same file, back through the importer, must fill the field.
+    // The reset above already put the form back.
+    await sleep(300);
     await page.locator('span.import-title').click();
     await sleep(500);
     await page.setInputFiles('#workflow-import-input', out);
@@ -283,10 +289,21 @@ try {
         // null, not 0: Girder's metadata PUT deletes on null, and 0 would leave
         // a submission claiming it was granted nothing -- which is not the same
         // thing as never having asked.
-        const left = await setFolderMeta(patchedFolderId, 'requested_disk_gb', null);
+        //
+        // Tolerant of a folder that is already gone: since #43 the reset in the
+        // body deletes the submission, so the happy path reaches here with
+        // nothing to unpatch. It is kept for the unhappy one -- a crash between
+        // the patch and the reset, which does leave test data behind.
+        const left = await setFolderMeta(patchedFolderId, 'requested_disk_gb', null).catch(
+            (e) => (/Invalid folder id/.test(String(e)) ? null : Promise.reject(e))
+        );
         console.log(
             `unpatched folder ${patchedFolderId}:`,
-            'requested_disk_gb' in left ? 'STILL SET' : 'removed'
+            left === null
+                ? 'folder already deleted with the submission'
+                : 'requested_disk_gb' in left
+                  ? 'STILL SET'
+                  : 'removed'
         );
     }
     await setQuota(0);

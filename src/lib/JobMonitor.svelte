@@ -875,6 +875,21 @@
         }
     }
 
+    /**
+     * Leave the finished submission behind: delete it, then reset to the form.
+     *
+     * The single path off the monitor since #43. Each terminal state used to
+     * offer this beside a plain "Run New Job" that reset without deleting, and
+     * the pair was a distinction without a decision -- both led to the same
+     * empty form, and the only difference (whether the submission was kept) was
+     * carried by a wording change between two buttons a word apart. The
+     * confirm() below is now the only thing standing between a click and a
+     * deleted submission, so it is not optional.
+     *
+     * Still safe when there is nothing to delete -- a job whose submission
+     * folder never existed, or was already removed -- because that case resets
+     * and returns rather than failing.
+     */
     async function handleDeleteAndReset() {
         if (!latestSubmission || !latestSubmission._id) {
             resetJob();
@@ -1157,14 +1172,8 @@
                         {/if}
 
                         <div class="action-buttons-row">
-                            <button
-                                on:click={resetJob}
-                                class="new-job-button"
-                                disabled={isDeletingSubmission}
-                            >
-                                <span class="material-icons">add</span>
-                                Run New Job
-                            </button>
+                            <!-- One button, not two (#43); see
+                                 handleDeleteAndReset(). -->
                             <button
                                 on:click={handleDeleteAndReset}
                                 class="delete-and-reset-button"
@@ -1211,14 +1220,8 @@
                         {/if}
 
                         <div class="action-buttons-row">
-                            <button
-                                on:click={resetJob}
-                                class="new-job-button"
-                                disabled={isDeletingSubmission}
-                            >
-                                <span class="material-icons">refresh</span>
-                                Try Again
-                            </button>
+                            <!-- One button, not two (#43); see
+                                 handleDeleteAndReset(). -->
                             <button
                                 on:click={handleDeleteAndReset}
                                 class="delete-and-reset-button"
@@ -1249,14 +1252,8 @@
                         </div>
 
                         <div class="action-buttons-row">
-                            <button
-                                on:click={resetJob}
-                                class="new-job-button"
-                                disabled={isDeletingSubmission}
-                            >
-                                <span class="material-icons">add</span>
-                                Run New Job
-                            </button>
+                            <!-- One button, not two (#43); see
+                                 handleDeleteAndReset(). -->
                             <button
                                 on:click={handleDeleteAndReset}
                                 class="delete-and-reset-button"
@@ -1976,29 +1973,6 @@
         gap: var(--md-spacing-sm);
         flex-wrap: wrap;
         align-items: center;
-    }
-
-    .new-job-button {
-        display: flex;
-        align-items: center;
-        gap: var(--md-spacing-xs);
-        padding: var(--md-spacing-sm) var(--md-spacing-md);
-        background-color: var(--md-primary);
-        color: white;
-        font-size: var(--md-font-body2);
-        font-weight: 500;
-        margin-top: 0;
-    }
-
-    .new-job-button:focus-visible {
-        outline: 3px solid var(--md-primary-dark);
-        outline-offset: 2px;
-        box-shadow: 0 0 0 4px rgba(25, 118, 210, 0.3);
-    }
-
-    .new-job-button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
     }
 
     .delete-and-reset-button {

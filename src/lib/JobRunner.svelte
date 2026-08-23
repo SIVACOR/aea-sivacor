@@ -32,6 +32,29 @@
     /** @type {string | null} */
     let uploadedFileId: string | null = null;
 
+    /**
+     * Whether FileUploader currently has an upload in flight.
+     *
+     * Tracked separately from `uploadedFileId` because the two say different
+     * things and both have to gate submit: mid-upload there is no file id yet,
+     * but "no file id" is also the state after a delete, and the run button was
+     * live in both (#43).
+     */
+    let isUploadInFlight = false;
+
+    /**
+     * Whether there is anything to submit at all.
+     *
+     * The rest of the form is still validated in runJob() on click rather than
+     * by disabling the button -- an incomplete step should say what is missing
+     * rather than leave a dead control -- but a missing or half-uploaded file is
+     * different in kind: no message can be phrased that makes clicking useful,
+     * and the file is the one input the user cannot fix from the form. So this
+     * one condition greys the button out, and `.run-blocked-hint` below it says
+     * why, which is what keeps the dead-button objection answered.
+     */
+    $: canSubmit = uploadedFileId !== null && !isUploadInFlight;
+
     // State for the job execution
     let isJobRunning = false;
     let jobStatusMessage = "";
@@ -191,6 +214,63 @@
             (size.gated && !size.selectable ? " (by request)" : "")
         );
     }
+
+    /**
+     * Whether the Advanced panel is unfolded (#43).
+     *
+     * Folded by default. Worker size, scratch disk and secrets are all
+     * defaulted for the ordinary submission -- one archive, one image, one main
+     * file -- and three panels of them sat between that form and the run
+     * button, so the button routinely fell below the fold on a laptop.
+     *
+     * Folding is not hiding: `advancedDigest` renders in the summary, so the
+     * effective size, disk and secret count are readable without opening
+     * anything. The panel is forced open only for the two cases where the digest
+     * is not enough -- a scratch-disk request the server would refuse, which is
+     * an error the user has to be able to see and edit, and a workflow import
+     * that deliberately set one of these.
+     */
+    let advancedOpen = false;
+
+    // Only ever opens, never closes: a user who folds the panel back over a
+    // standing problem has said what they want, and re-opening on the next
+    // keystroke would be a fight. `volumeProblem` is still enforced at submit,
+    // where it names the same reason in the banner.
+    $: if (volumeProblem !== null) {
+        advancedOpen = true;
+    }
+
+    /**
+     * One line describing what the folded panel holds, so nothing inside it is
+     * invisible. Names only what is actually set: the size always (there is
+     * always one), disk and secrets only when asked for, so the common case
+     * reads as a short "30 GiB - 8 cores" rather than a row of "none"s.
+     */
+    $: advancedDigest = (() => {
+        const parts: string[] = [];
+        const size = workerSizes.find(
+            (candidate) => candidate.memory_gb === selectedMemoryGb,
+        );
+        if (size) {
+            parts.push(
+                `${size.memory_gb} GiB · ${size.vcpus} core${
+                    size.vcpus === 1 ? "" : "s"
+                }`,
+            );
+        }
+        // The granted figure, not the typed one, for the reason the hint inside
+        // the panel exists: the server rounds up, and a digest that said 95
+        // where 100 will be created would be the surprise this is meant to
+        // prevent.
+        if (requestedDiskGb !== null && requestedDiskGb > 0) {
+            parts.push(`+${volumeGrantedGb ?? requestedDiskGb} GB scratch disk`);
+        }
+        const secretCount = Object.keys(jobSecrets).length;
+        if (secretCount > 0) {
+            parts.push(`${secretCount} secret${secretCount === 1 ? "" : "s"}`);
+        }
+        return parts.length > 0 ? parts.join(" · ") : "defaults";
+    })();
 
     /**
      * What the previous run's memory came to, handed down by JobMonitor, or null
@@ -464,6 +544,20 @@
     }
 
     /**
+     * Mirrors FileUploader's in-flight state so submit can be blocked while an
+     * archive is still going up. Only the flag: the file id is left alone, so a
+     * failed second upload does not silently discard the first one, which still
+     * exists in Girder and is still what the uploader is showing.
+     *
+     * @param {CustomEvent<{ uploading: boolean }>} event
+     */
+    function handleUploadingChange(
+        event: CustomEvent<{ uploading: boolean }>,
+    ) {
+        isUploadInFlight = event.detail.uploading;
+    }
+
+    /**
      * Clears the staged file once the uploader has deleted it. Without this the
      * form keeps the id of a file that no longer exists and submit fails with a
      * confusing server error instead of "Please upload a file first."
@@ -513,6 +607,17 @@
         // nothing about the disk.
         if (typeof definition.resources?.disk_gb === "number") {
             requestedDiskGb = definition.resources.disk_gb;
+        }
+        // Unfold Advanced whenever the file spoke to something inside it. The
+        // digest in the summary would report the imported values either way,
+        // but an import is a deliberate act by the user about these fields
+        // specifically, so it should land somewhere they can see and check it.
+        if (
+            typeof definition.resources?.memory_gb === "number" ||
+            typeof definition.resources?.disk_gb === "number" ||
+            (definition.env_secrets ?? []).length > 0
+        ) {
+            advancedOpen = true;
         }
         // A stale banner from an earlier attempt would otherwise sit under the
         // run button describing a form that no longer exists.
@@ -610,6 +715,18 @@
             await failValidation(
                 "Your ORCID account does not have a valid public email " +
                     "address. Please update your email before submitting.",
+            );
+            return;
+        }
+
+        // The button is disabled for both of these, so neither should be
+        // reachable by clicking. They stay because runJob() is also the path a
+        // keyboard-triggered submit takes, and because the two want different
+        // wording: "upload a file" is wrong advice for someone whose file is
+        // uploading right now.
+        if (isUploadInFlight) {
+            await failValidation(
+                "Your file is still uploading. Please wait for it to finish.",
             );
             return;
         }
@@ -732,6 +849,7 @@
         <FileUploader
             on:uploadcomplete={handleUploadComplete}
             on:uploaddeleted={handleUploadDeleted}
+            on:uploadingchange={handleUploadingChange}
         />
 
         <div class="config-section">
@@ -881,6 +999,30 @@
                 <span class="material-icons">add</span>
                 Add Step
             </button>
+
+            <!-- Everything below here is Advanced: workflow-level knobs that
+                 the ordinary submission never touches (#43). A real
+                 <details>, not a div and a click handler, so the disclosure
+                 keyboard and screen-reader behaviour comes from the element
+                 rather than being reimplemented. -->
+            <details class="advanced-section" bind:open={advancedOpen}>
+                <summary class="advanced-summary">
+                    <span class="material-icons advanced-icon" aria-hidden="true"
+                        >tune</span
+                    >
+                    <span class="advanced-label">Advanced</span>
+                    <!-- The digest is what makes folding safe: the values inside
+                         stay readable while the panel is shut. -->
+                    <span class="advanced-digest">{advancedDigest}</span>
+                    <!-- A real element rather than a ::after ligature: the
+                         global .material-icons class carries the
+                         font-feature-settings the ligature needs, and
+                         re-declaring those on a pseudo-element is how you get a
+                         literal "expand_more" rendered as text. -->
+                    <span class="material-icons advanced-chevron" aria-hidden="true"
+                        >expand_more</span
+                    >
+                </summary>
 
             <!-- Worker size. Workflow-level, like the secrets below it: every
                  step of a submission runs on one machine, so this cannot sit in
@@ -1202,13 +1344,17 @@
                 {/each}
             </div>
 
-            <!-- Only disabled while a submission is in flight, to stop a double
-                 submit. Everything else is validated in runJob() on click, so an
+            </details>
+
+            <!-- Disabled for a submission already in flight (to stop a double
+                 submit) and for a file that is missing or still uploading --
+                 `canSubmit`, whose comment says why those two and nothing else.
+                 Every other field is validated in runJob() on click, so an
                  incomplete form says what is missing instead of leaving the user
                  with a dead button and no explanation. -->
             <button
                 on:click={runJob}
-                disabled={isJobRunning}
+                disabled={isJobRunning || !canSubmit}
                 class="run-button"
                 class:running={isJobRunning}
             >
@@ -1220,6 +1366,22 @@
                     Run Replication Workflow
                 {/if}
             </button>
+            <!-- The other half of greying the button out: a disabled control
+                 with no stated reason is the thing the comment above is guarding
+                 against, so say which of the two reasons it is. Not role=alert:
+                 this is the resting state of an empty form, not an error. -->
+            {#if !isJobRunning && !canSubmit}
+                <div class="run-blocked-hint" role="status">
+                    <span class="material-icons hint-icon" aria-hidden="true"
+                        >info_outline</span
+                    >
+                    <span>
+                        {isUploadInFlight
+                            ? "Waiting for your file to finish uploading."
+                            : "Upload a file above to enable this button."}
+                    </span>
+                </div>
+            {/if}
             {#if $hasInvalidOrcidEmail}
                 <div class="email-warning">
                     <span class="material-icons warning-icon">warning</span>
@@ -1874,6 +2036,88 @@
             align-self: center;
             margin-top: var(--md-spacing-sm);
         }
+    }
+
+    /* Advanced fold (#43). No frame of its own: the three panels it holds are
+       already boxed, so a fourth border around them would read as nesting
+       rather than as grouping. The summary carries the only visible rule. */
+    .advanced-section {
+        border-top: 1px solid var(--md-outline-variant, #cac4d0);
+        padding-top: var(--md-spacing-sm);
+    }
+
+    .advanced-summary {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-sm);
+        padding: var(--md-spacing-xs) 0;
+        cursor: pointer;
+        /* The default triangle is replaced by the rotating chevron below, which
+           can be positioned with the rest of the row. */
+        list-style: none;
+        user-select: none;
+    }
+
+    /* Safari and older WebKit ignore `list-style` on a summary. */
+    .advanced-summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .advanced-chevron {
+        font-size: 1.25rem;
+        color: var(--md-on-surface-variant, #49454f);
+        transition: transform var(--md-transition-standard, 0.2s);
+    }
+
+    .advanced-section[open] .advanced-chevron {
+        transform: rotate(180deg);
+    }
+
+    .advanced-summary:focus-visible {
+        outline: 3px solid var(--md-primary);
+        outline-offset: 2px;
+        border-radius: var(--md-radius-xs, 4px);
+    }
+
+    .advanced-icon {
+        font-size: 1rem;
+        color: var(--md-primary-dark, #1565c0);
+    }
+
+    .advanced-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--md-on-surface, #1c1b1f);
+    }
+
+    /* Takes the slack, so the chevron sits hard right and the digest reads as a
+       caption to the label rather than as a second heading. */
+    .advanced-digest {
+        flex: 1;
+        font-size: 0.75rem;
+        color: var(--md-on-surface-variant, #49454f);
+    }
+
+    /* The first panel inside the fold already carries a top margin of its own,
+       which doubles up against the summary. */
+    .advanced-section[open] > .resources-section:first-of-type {
+        margin-top: var(--md-spacing-sm);
+    }
+
+    /* Says why the run button is grey. Sits directly under it, styled as a hint
+       rather than as an error: an empty form is not a mistake. */
+    .run-blocked-hint {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: var(--md-spacing-xs);
+        font-size: var(--md-font-caption);
+        color: var(--md-on-surface-variant, #49454f);
+    }
+
+    .run-blocked-hint .hint-icon {
+        font-size: 1rem;
+        color: var(--md-on-surface-variant, #49454f);
     }
 
     /* Secrets section */
