@@ -8,7 +8,7 @@
  *   node e2e/screenshots.mjs             # every phase
  *   node e2e/screenshots.mjs run failed  # named phases only
  *
- * Phases: login, run, failed, waiting
+ * Phases: login, run, advanced, failed, waiting
  *
  * Two things differ from a real production session and are compensated for
  * here, because otherwise the shots would be quietly wrong:
@@ -24,10 +24,23 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { open, submitJob, resetToRunner, waitTerminal, API, UI, ADMIN, sleep } from './lib.mjs';
+import {
+    open,
+    submitJob,
+    resetToRunner,
+    openAdvanced,
+    getMemberToken,
+    waitTerminal,
+    API,
+    UI,
+    ADMIN,
+    sleep,
+} from './lib.mjs';
 
 const OUT = fileURLToPath(new URL('../../docs/docs/images/', import.meta.url));
-const phases = process.argv.slice(2).length ? process.argv.slice(2) : ['login', 'run', 'failed', 'waiting'];
+const phases = process.argv.slice(2).length
+    ? process.argv.slice(2)
+    : ['login', 'run', 'advanced', 'failed', 'waiting'];
 const want = (p) => phases.includes(p);
 
 // Docs screenshots are viewed inline in a book theme; 1280 wide at DPR 2 keeps
@@ -66,6 +79,44 @@ async function shotOf(page, selector, name) {
     await el.scrollIntoViewIfNeeded();
     await page.waitForTimeout(500);
     await shot(el, name);
+    return true;
+}
+
+/**
+ * One shot covering several elements at once, clipped to their union.
+ *
+ * For the run button and the hint that says why it is grey (#43): they are
+ * siblings with no wrapper of their own, and either alone misses the point --
+ * a grey button with no reason, or a reason with nothing to attach it to.
+ */
+async function shotUnion(page, selectors, name, pad = 8) {
+    const boxes = [];
+    for (const sel of selectors) {
+        const el = page.locator(sel).first();
+        if (!(await el.count())) {
+            console.log(`  ! ${name}: no match for ${sel} — skipped`);
+            return false;
+        }
+        await el.scrollIntoViewIfNeeded();
+        boxes.push(await el.boundingBox());
+    }
+    await page.waitForTimeout(400);
+    const fresh = [];
+    for (const sel of selectors) fresh.push(await page.locator(sel).first().boundingBox());
+    const use = fresh.every(Boolean) ? fresh : boxes;
+    const x = Math.min(...use.map((b) => b.x)) - pad;
+    const y = Math.min(...use.map((b) => b.y)) - pad;
+    const clip = {
+        x: Math.max(0, x),
+        y: Math.max(0, y),
+        width: Math.max(...use.map((b) => b.x + b.width)) - x + pad,
+        height: Math.max(...use.map((b) => b.y + b.height)) - y + pad,
+    };
+    const file = path.join(OUT, name);
+    await page.screenshot({ path: file, clip, animations: 'disabled' });
+    const kb = Math.round(fs.statSync(file).size / 1024);
+    shots.push(`${name} (${kb} KB)`);
+    console.log(`  ✓ ${name} (${kb} KB)`);
     return true;
 }
 
@@ -141,10 +192,20 @@ async function phaseRun() {
     const { page, close } = await open({ headless: true });
     try {
         await page.setViewportSize(VIEWPORT);
-        await resetToRunner(page);
+        // { advanced: false }: the shots have to show the form as a user
+        // first meets it, and since #43 that is with Advanced folded.
+        await resetToRunner(page, { advanced: false });
         await dismissCookies(page);
         await page.waitForTimeout(800);
         await shot(page, 'sivacor-upload-page.png');
+
+        // Grey, with its reason, on an empty form (#43). Taken here because
+        // "before anything is uploaded" is the only moment it exists.
+        await shotUnion(
+            page,
+            ['button.run-button', '.run-blocked-hint'],
+            'sivacor-run-disabled.png'
+        );
 
         // Upload only, so the success state and the Delete Uploaded File button show.
         const zip = path.join(os.tmpdir(), 'sivacor-e2e', 'package.zip');
@@ -215,13 +276,72 @@ async function phaseRun() {
     }
 }
 
+// ------------------------------------------------- the Advanced panel (#43)
+/**
+ * The Advanced panel, opened, showing the real machine-size ladder.
+ *
+ * Its own phase rather than a shot inside `run`, for two reasons that both make
+ * an in-phase shot quietly wrong:
+ *
+ *  - deploy-dev seeds no size catalogue, so the picker falls through to the
+ *    plugin's single 60 GiB default and the shot shows one rung where production
+ *    has four. This phase installs the production ladder and restores it.
+ *  - `run` drives the deploy-dev **admin**, who bypasses the group gate by
+ *    design, so the two "by request" rungs would render selectable. This phase
+ *    drives a member, which is what the docs describe.
+ */
+const LADDER = [
+    { memory_gb: 30, flavor: 'm3.medium', vcpus: 8, gated: false },
+    { memory_gb: 60, flavor: 'm3.large', vcpus: 16, gated: false },
+    { memory_gb: 125, flavor: 'm3.xl', vcpus: 32, gated: true },
+    { memory_gb: 250, flavor: 'm3.2xl', vcpus: 64, gated: true },
+];
+
+async function phaseAdvanced() {
+    console.log('\n[advanced] seeding the production size ladder, shooting as a member');
+    const token = await girderToken();
+    const original = await fetch(`${API}/system/setting?key=sivacor.worker_sizes`, {
+        headers: { 'Girder-Token': token },
+    }).then((r) => r.json());
+    await setSetting('sivacor.worker_sizes', LADDER, token);
+    const { page, close } = await open({ headless: true, token: await getMemberToken(token) });
+    try {
+        await page.setViewportSize(VIEWPORT);
+        await resetToRunner(page, { advanced: false });
+        await dismissCookies(page);
+        await page.waitForTimeout(600);
+        // The smallest rung, which is what a new submission gets: the picker
+        // remembers the last choice in localStorage, and a shot showing a
+        // larger one would contradict the docs.
+        await openAdvanced(page);
+        const picker = page.locator('#worker-size-select');
+        if (await picker.count()) {
+            const smallest = await picker
+                .locator('option')
+                // The `value` *property*, not the attribute: Svelte binds a
+                // numeric option value through its own value map and never
+                // writes the attribute, so getAttribute('value') is null.
+                .evaluateAll((els) => els.find((e) => !e.disabled)?.value ?? null);
+            if (smallest) await picker.selectOption(smallest);
+            await page.waitForTimeout(700);
+        }
+        await shotOf(page, 'details.advanced-section', 'sivacor-advanced-panel.png');
+    } finally {
+        await setSetting('sivacor.worker_sizes', original, token).catch(() => {});
+        console.log('  · restored sivacor.worker_sizes');
+        await close();
+    }
+}
+
 // ------------------------------------------------------------- failed run
 async function phaseFailed() {
     console.log('\n[failed] submitting a package that errors');
     const { page, close } = await open({ headless: true });
     try {
         await page.setViewportSize(VIEWPORT);
-        await resetToRunner(page);
+        // { advanced: false }: the shots have to show the form as a user
+        // first meets it, and since #43 that is with Advanced folded.
+        await resetToRunner(page, { advanced: false });
         await dismissCookies(page);
         const { status, id } = await submitJob(page, { zip: makeFailingPackage(), mainFile: 'main.R' });
         console.log(`  · submit_job → ${status} ${id ?? ''}`);
@@ -244,7 +364,9 @@ async function phaseWaiting() {
         scaledDown = true;
         await sleep(8000);
 
-        await resetToRunner(page);
+        // { advanced: false }: the shots have to show the form as a user
+        // first meets it, and since #43 that is with Advanced folded.
+        await resetToRunner(page, { advanced: false });
         await dismissCookies(page);
         const { status, id } = await submitJob(page, { skipForm: false });
         console.log(`  · submit_job → ${status} ${id ?? ''}`);
@@ -266,8 +388,14 @@ async function phaseWaiting() {
     }
 }
 
-const RUN = { login: phaseLogin, run: phaseRun, failed: phaseFailed, waiting: phaseWaiting };
-for (const name of ['login', 'run', 'failed', 'waiting']) {
+const RUN = {
+    login: phaseLogin,
+    run: phaseRun,
+    advanced: phaseAdvanced,
+    failed: phaseFailed,
+    waiting: phaseWaiting,
+};
+for (const name of ['login', 'run', 'advanced', 'failed', 'waiting']) {
     if (want(name)) await RUN[name]();
 }
 console.log(`\nWrote ${shots.length} screenshot(s) to ${OUT}`);
