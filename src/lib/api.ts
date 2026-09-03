@@ -864,6 +864,46 @@ export async function uploadFileChunk(uploadId: string, offset: number, chunk: B
     return response;
 }
 
+export interface UploadIntegrity {
+    /** Bytes the upload declared, i.e. the `size` on the file document. */
+    declared: number | null;
+    /** Bytes actually stored, or null when the server cannot tell. */
+    stored: number | null;
+    /** False only when the server is certain the stored copy is short. */
+    complete: boolean;
+}
+
+/**
+ * Step 3: asks the server whether the bytes it stored match the file document.
+ *
+ * Not something this client can work out for itself, which is the whole reason
+ * the endpoint exists. A file document's `size` is the size the upload
+ * *declared*, and that is exactly the value that is wrong when Girder's
+ * chunk-upload race truncates a blob -- so fetching `GET /file/:id` and
+ * comparing it against `File.size` here would always agree, however few bytes
+ * actually landed. Only the server can compare the document against the disk.
+ *
+ * Fails **open**: a server that predates this endpoint, or one that cannot stat
+ * its assetstore, must not block uploads. `submit_job` re-checks server-side,
+ * so a false negative here costs a clear message, not correctness.
+ *
+ * See development_notes/girder_upload_race_plan.md.
+ * @param {string} fileId - The ID of the file just uploaded.
+ * @returns {Promise<UploadIntegrity | null>} The verdict, or null if unavailable.
+ */
+export async function checkUploadIntegrity(fileId: string): Promise<UploadIntegrity | null> {
+    try {
+        const response = await api<UploadIntegrity>(
+            `/sivacor/upload_integrity?id=${encodeURIComponent(fileId)}`
+        );
+        if (!response || typeof response.complete !== 'boolean') return null;
+        return response;
+    } catch (error) {
+        console.warn('Could not verify the upload:', error);
+        return null;
+    }
+}
+
 /**
  * Builds a directly-linkable download URL for a file.
  *
