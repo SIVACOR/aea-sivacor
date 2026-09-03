@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from "svelte";
     import {
+        checkUploadIntegrity,
         deleteItem,
         initiateFileUpload,
         listPendingUploads,
@@ -261,11 +262,53 @@
                 );
             }
 
+            // Girder can finalise an upload whose stored copy is SHORTER than
+            // the size it declared: two concurrent /file/chunk requests for one
+            // upload let the aborted one's rollback delete bytes the other had
+            // already written, while the counter it finalises on keeps the
+            // advanced value. It happened twice in production on 2026-09-02,
+            // and both times the first thing to notice was a worker dying with
+            // ChunkedEncodingError half an hour into the run. Asking here costs
+            // one request and moves that discovery to the moment the user is
+            // still looking at this control. See
+            // development_notes/girder_upload_race_plan.md.
+            //
+            // The check has to be server-side: `size` on the file document is
+            // the size we declared at initiateFileUpload, so comparing it
+            // against selectedFile.size would agree with itself no matter how
+            // little was stored.
+            uploadStatus = "Verifying upload...";
+            const integrity = await checkUploadIntegrity(lastChunk._id);
+            if (integrity && !integrity.complete) {
+                // The bad copy is deliberately NOT deleted: it is the only
+                // physical evidence of an upstream bug we have not fixed yet,
+                // and submit_job refuses it server-side, so leaving it cannot
+                // cost a doomed run. It is left visible instead --
+                // uploadedItemId stays null so refreshPendingUploads() does not
+                // filter it out (that filter exists to hide the file this
+                // session is *using*), which puts it in the leftovers panel
+                // with a delete button. The "Delete Uploaded File" button is no
+                // use here: it renders only at uploadProgress === 100, and the
+                // catch below resets that to 0.
+                await refreshPendingUploads();
+                const stored = (integrity.stored ?? 0).toLocaleString();
+                const declared = (integrity.declared ?? totalSize).toLocaleString();
+                throw new Error(
+                    `Only ${stored} of ${declared} bytes arrived intact. This is a` +
+                        " known fault in the upload itself, not a problem with your" +
+                        " package -- please upload the file again. A fresh upload" +
+                        " stores a fresh copy. The incomplete one is listed under" +
+                        " previous uploads below, where you can delete it. If this" +
+                        " happens twice for the same file, contact" +
+                        " support@sivacor.org.",
+                );
+            }
+            uploadedItemId = lastChunk.itemId ?? null;
+
             // Upload complete, final progress to 100%
             uploadProgress = 100;
             uploadStatus = "Upload complete!";
             console.log("File upload completed successfully:", lastChunk);
-            uploadedItemId = lastChunk.itemId ?? null;
             dispatch("uploadcomplete", {
                 fileId: lastChunk._id, // This is the ID the JobRunner needs
             });
