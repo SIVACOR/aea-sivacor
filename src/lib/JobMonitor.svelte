@@ -79,6 +79,98 @@
     // Delete submission state
     let isDeletingSubmission = false;
 
+    /**
+     * Set the instant Cancel is clicked, and cleared only by resetJob().
+     *
+     * jobStatusText cannot carry this, though it was what the disabled binding
+     * used to read: checkJobStatus() reassigns it from the job document every
+     * 5 s, which re-enables the button between clicks. That is the likeliest
+     * explanation for the 2026-09-03 job being cancelled twice, two seconds
+     * apart. Harmless there -- the second cancel was a no-op 200 -- but the
+     * same button-liveness bug as the delete race beside it.
+     */
+    let cancelRequested = false;
+
+    /**
+     * The folder status a cancel now passes through, and the only value of
+     * `meta.status` this app reads.
+     *
+     * It exists because the folder's status stopped agreeing with the job's, on
+     * purpose: a cancelled job is terminal for the server while the worker
+     * still has ~12 s of uploads to do, and `delete_submission` refuses for
+     * exactly that long. See
+     * development_notes/incidents/2026-09-03-cancel-delete-race.md.
+     */
+    const CANCELING_STATUS = "canceling";
+
+    const SETTLE_POLL_MS = 3000;
+    /** ~60 s, several times the ~12 s a real write-back takes. */
+    const SETTLE_POLL_LIMIT = 20;
+    let settleTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let settlePolls = 0;
+
+    /**
+     * Whether the submission is still being written to, so cannot be deleted.
+     *
+     * Gives up after SETTLE_POLL_LIMIT checks and reports "not settling", which
+     * re-enables the button: the server is the authority either way, and a
+     * clear error beats a control that is stuck forever because something
+     * upstream stopped answering.
+     */
+    const isSettling = (submission: Folder | null, polls: number) =>
+        submission?.meta?.status === CANCELING_STATUS &&
+        polls < SETTLE_POLL_LIMIT;
+
+    $: submissionSettling = isSettling(latestSubmission, settlePolls);
+
+    /**
+     * Re-read the submission folder while a cancelled run settles.
+     *
+     * Nothing else would: the 5 s job poller stops at a terminal job status,
+     * and the folder's status changes *after* that.
+     *
+     * Started from checkJobStatus and re-armed from its own callback, rather
+     * than from a `$:` block -- `latestSubmission` is what this both reads and
+     * writes, which makes a reactive trigger self-feeding (eslint's
+     * svelte/infinite-reactive-loop says so too). A setTimeout chain rather
+     * than an interval for two reasons: it has to stop by itself, and the e2e
+     * probe's leak detector only watches 5 s intervals, so a leak here would
+     * be invisible to the harness.
+     */
+    function startSettlePolling(jobId: string) {
+        if (settleTimeoutId !== null) return;
+        settleTimeoutId = setTimeout(async () => {
+            settleTimeoutId = null;
+            settlePolls += 1;
+            try {
+                const submission = await getSubmissionByJobId(jobId);
+                // Same guard as checkJobStatus(): the user may have moved on
+                // while this was in flight, and adopting the response now
+                // would resurrect the submission they left.
+                if (jobId !== currentJobId) return;
+                if (submission) {
+                    latestSubmission = submission;
+                }
+            } catch (error) {
+                console.error("Error re-reading a settling submission:", error);
+                return;
+            }
+            // Recomputed here rather than read off submissionSettling: `$:`
+            // values update on the next tick, so that one is still stale.
+            if (isSettling(latestSubmission, settlePolls)) {
+                startSettlePolling(jobId);
+            }
+        }, SETTLE_POLL_MS);
+    }
+
+    function stopSettlePolling() {
+        if (settleTimeoutId !== null) {
+            clearTimeout(settleTimeoutId);
+            settleTimeoutId = null;
+        }
+        settlePolls = 0;
+    }
+
     /** Evidence for the resource controls: what the run the user just left came to. */
     let previousRun: PreviousRunPeaks | null = null;
 
@@ -481,6 +573,12 @@
                 stopPolling();
                 // Load performance metrics when job finishes (success or error)
                 await loadPerformanceMetrics();
+                // Only a cancel leaves the folder transitional, and only the
+                // job reaching a terminal state gets us here -- so this is the
+                // one moment the settle poll needs to start.
+                if (isSettling(latestSubmission, settlePolls)) {
+                    startSettlePolling(jobId);
+                }
             }
 
             // Dispatch job state update for title management
@@ -537,13 +635,17 @@
     }
 
     async function handleCancel() {
-        if (!jobDetails || !jobDetails._id) return;
+        if (!jobDetails || !jobDetails._id || cancelRequested) return;
+        cancelRequested = true;
         jobStatusText = "Canceling...";
         try {
             await cancelJob(jobDetails._id);
         } catch (e) {
             console.error("Job cancellation failed:", e);
             jobStatusText = "Cancellation failed.";
+            // Nothing was revoked, so the button has to come back -- this is
+            // the one path that clears the flag short of resetJob().
+            cancelRequested = false;
         }
     }
 
@@ -551,7 +653,9 @@
         // Before the clears below, which drop the metrics this reads.
         previousRun = summarisePreviousRun();
         stopPolling();
+        stopSettlePolling();
         disconnectFromLogs();
+        cancelRequested = false;
         jobDetails = null;
         jobStatusText = null;
         errorMessage = null;
@@ -645,6 +749,7 @@
 
     onDestroy(() => {
         stopPolling();
+        stopSettlePolling();
         disconnectFromLogs();
     });
 
@@ -1046,7 +1151,7 @@
                             class="cancel-button"
                             on:click={handleCancel}
                             disabled={jobDetails.status === 5 ||
-                                jobStatusText === "Canceling..."}
+                                cancelRequested}
                         >
                             <span class="material-icons">stop</span>
                             Cancel Job
@@ -1251,22 +1356,40 @@
                             </div>
                         </div>
 
+                        {#if submissionSettling}
+                            <!-- The 2026-09-03 race, made visible. The job is
+                                 cancelled and the worker is still uploading
+                                 this run's output; the server refuses a delete
+                                 for those few seconds, so say why rather than
+                                 offer a button that fails into an alert(). -->
+                            <p class="settling-hint">
+                                <span class="material-icons">hourglass_top</span
+                                >
+                                Saving the output produced before the job
+                                stopped. This takes a few seconds, and the
+                                submission can be deleted once it finishes.
+                            </p>
+                        {/if}
+
                         <div class="action-buttons-row">
                             <!-- One button, not two (#43); see
                                  handleDeleteAndReset(). -->
                             <button
                                 on:click={handleDeleteAndReset}
                                 class="delete-and-reset-button"
-                                disabled={isDeletingSubmission}
+                                disabled={isDeletingSubmission ||
+                                    submissionSettling}
                             >
                                 <span class="material-icons">
-                                    {isDeletingSubmission
+                                    {isDeletingSubmission || submissionSettling
                                         ? "hourglass_empty"
                                         : "delete"}
                                 </span>
                                 {isDeletingSubmission
                                     ? "Deleting..."
-                                    : "Delete & Run New Job"}
+                                    : submissionSettling
+                                      ? "Finishing up..."
+                                      : "Delete & Run New Job"}
                             </button>
                         </div>
                     </div>
@@ -1973,6 +2096,19 @@
         gap: var(--md-spacing-sm);
         flex-wrap: wrap;
         align-items: center;
+    }
+
+    .settling-hint {
+        display: flex;
+        align-items: center;
+        gap: var(--md-spacing-xs);
+        margin: var(--md-spacing-sm) 0 0;
+        font-size: 0.875rem;
+        color: var(--md-on-surface-variant);
+    }
+
+    .settling-hint .material-icons {
+        font-size: 1.125rem;
     }
 
     .delete-and-reset-button {
