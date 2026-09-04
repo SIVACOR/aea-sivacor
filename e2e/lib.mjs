@@ -274,6 +274,12 @@ export async function resetToRunner(page, { advanced = true } = {}) {
     // locator matches it whenever the form is already showing with a file
     // staged -- and this helper would throw away the upload it was called to
     // preserve.
+    //
+    // One window where this legitimately no-ops: a submission cancelled while a
+    // worker still holds it renders the button *disabled* ("Finishing up...")
+    // until the folder's meta.status leaves `canceling` -- about 12 s for a real
+    // write-back, and up to 60 s before the monitor gives up waiting. The retry
+    // loop in volume-disk.mjs's backToRunner() is the pattern for that case.
     let b = page.locator('.action-buttons-row button.delete-and-reset-button').first();
     if (!(await b.count())) b = page.locator('button.new-job-button').first();
     if (!(await b.count())) {
