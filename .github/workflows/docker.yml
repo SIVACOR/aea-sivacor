@@ -9,14 +9,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+      - name: Compute tags
+        id: tags
+        run: |
+          branch="${GITHUB_REF_NAME//\//-}"
+          tags="${branch},sha-${GITHUB_SHA::7}"
+          [ "${GITHUB_REF}" = "refs/heads/main" ] && tags="${tags},latest"
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+          echo "will push: ${tags}"
       - name: Build and push
-        uses: mr-smithers-excellent/docker-build-push@v6
+        uses: mr-smithers-excellent/docker-build-push@v7
         with:
           image: xarthisius/aea-sivacor
-          tags: latest
+          tags: ${{ steps.tags.outputs.tags }}
           registry: docker.io
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           enableBuildKit: true
           multiPlatform: false
+      # The action above exposes imageFullName/imageName/tags but no digest, so
+      # ask the registry for it. This is the only ref that is immutable no matter
+      # what later pushes do to `latest` or to the branch tag, so it is what a
+      # post-mortem needs when the question is "which build is production
+      # actually running".
+      - name: Record image digest
+        run: |
+          ref="docker.io/xarthisius/aea-sivacor:sha-${GITHUB_SHA::7}"
+          digest="$(docker buildx imagetools inspect "$ref" --format '{{.Manifest.Digest}}')"
+          {
+            echo "### Image pushed"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| tags | \`${{ steps.tags.outputs.tags }}\` |"
+            echo "| digest | \`${digest}\` |"
+            echo
+            echo "Pin a deployment to this exact build with:"
+            echo
+            echo '```sh'
+            echo "AEA_SIVACOR_IMAGE=docker.io/xarthisius/aea-sivacor@${digest}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Image digest::docker.io/xarthisius/aea-sivacor@${digest}"
