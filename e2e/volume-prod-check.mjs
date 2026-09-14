@@ -28,7 +28,7 @@
 // environment.
 //
 // The six items are the ones written out under CV6 in
-// `development_notes/cinder_volumes_rollout.md`. Numbers are derived from the
+// `development_notes/06_cinder_volumes_rollout.md`. Numbers are derived from the
 // live quota rather than hardcoded, so the file keeps working when a ceiling or
 // the granularity changes.
 

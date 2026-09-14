@@ -271,7 +271,7 @@
             // ChunkedEncodingError half an hour into the run. Asking here costs
             // one request and moves that discovery to the moment the user is
             // still looking at this control. See
-            // development_notes/girder_upload_race_plan.md.
+            // development_notes/08_girder_upload_race_plan.md.
             //
             // The check has to be server-side: `size` on the file document is
             // the size we declared at initiateFileUpload, so comparing it

@@ -1,4 +1,4 @@
-// Scenario: C4 -- the extra-scratch-disk control (cinder_volumes_plan.md).
+// Scenario: C4 -- the extra-scratch-disk control (05_cinder_volumes_plan.md).
 //
 //   node e2e/volume-disk.mjs
 //

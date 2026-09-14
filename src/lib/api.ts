@@ -887,7 +887,7 @@ export interface UploadIntegrity {
  * its assetstore, must not block uploads. `submit_job` re-checks server-side,
  * so a false negative here costs a clear message, not correctness.
  *
- * See development_notes/girder_upload_race_plan.md.
+ * See development_notes/08_girder_upload_race_plan.md.
  * @param {string} fileId - The ID of the file just uploaded.
  * @returns {Promise<UploadIntegrity | null>} The verdict, or null if unavailable.
  */

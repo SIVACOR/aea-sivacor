@@ -295,7 +295,7 @@
     // one that gets OOM-killed; under 25% the rung below would have held it.
     // Only ever a suggestion: for MATLAB in particular the peak can land in a
     // stage other than the one that asked for the memory, because zeros() does
-    // not commit until something writes (worker_sizing_plan.md item 11).
+    // not commit until something writes (03_worker_sizing_plan.md item 11).
     $: previousRunAdvice =
         previousRunPercent === null
             ? null
