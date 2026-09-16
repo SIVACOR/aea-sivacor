@@ -943,12 +943,12 @@
                                 id="execution-file-{entry.id}"
                                 bind:value={entry.executionFileName}
                                 disabled={isJobRunning}
-                                placeholder="e.g., main.do, main.R"
+                                placeholder="e.g., main.do, main.R, main.jl"
                                 class="file-input"
                             />
                             <div class="input-hint">
                                 💡 Common: <code>main.do</code> (Stata),
-                                <code>main.R</code> (R)
+                                <code>main.R</code> (R), <code>main.jl</code> (Julia)
                             </div>
                         </div>
 
