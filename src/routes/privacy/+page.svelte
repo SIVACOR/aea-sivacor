@@ -10,7 +10,7 @@
                 Back to SIVACOR
             </a>
             <h1>Privacy Policy</h1>
-            <p class="last-updated">Last updated: 6 August 2026</p>
+            <p class="last-updated">Last updated: 20 September 2026</p>
         </header>
 
         <section>
@@ -73,6 +73,11 @@
                         <td>Girder backend (retained for 14 days)</td>
                     </tr>
                     <tr>
+                        <td>Resource usage totals (see section 8)</td>
+                        <td>Measured when a worker machine is shut down</td>
+                        <td>Your Girder user record (deleted with your account)</td>
+                    </tr>
+                    <tr>
                         <td
                             >Server access logs (IP address, request metadata)</td
                         >
@@ -110,6 +115,17 @@
                     processing consists of reducing your job to figures that
                     identify no one, and the result cannot be traced back to you,
                     so the impact on your rights is minimal.
+                </li>
+                <li>
+                    <strong>Legitimate interests (Article 6(1)(f)):</strong> We keep
+                    a running total of the computing time and storage your
+                    submissions have consumed (see section 8). Unlike the record
+                    above, this one <em>is</em> linked to your account, because a
+                    total that cannot be attributed cannot tell us how a shared,
+                    finite allocation was used or stop one person exhausting it.
+                    It is a total rather than a history, it is deleted with your
+                    account, and nothing is refused or limited on the basis of it
+                    today.
                 </li>
             </ul>
         </section>
@@ -218,6 +234,11 @@
                     <strong>Anonymous operational records:</strong> Kept
                     indefinitely. These contain no personal data — see section 7.
                 </li>
+                <li>
+                    <strong>Resource usage totals:</strong> Kept for as long as
+                    you hold an account, and deleted with it. These
+                    <em>are</em> linked to you — see section 8.
+                </li>
             </ul>
         </section>
 
@@ -262,7 +283,7 @@
             </p>
             <p>
                 Because these records are anonymous, they are not personal data
-                and the rights in section 9 do not apply to them: there is
+                and the rights in section 10 do not apply to them: there is
                 nothing in them to give you a copy of, correct, or delete. Your
                 submission and everything identifying it are still deleted in
                 full, on request or on the 14-day schedule.
@@ -270,7 +291,74 @@
         </section>
 
         <section>
-            <h2>8. Cookies and Browser Storage</h2>
+            <h2>8. Resource Usage Accounting</h2>
+            <p>
+                SIVACOR runs on a shared, publicly funded allocation of cloud
+                computing. Every submission starts a virtual machine, and that
+                machine costs the allocation whether your analysis takes ten
+                seconds or ten hours. So that we can report how the allocation
+                was used, and make sure one person's submissions cannot exhaust
+                capacity everyone else depends on, we keep a running total of
+                what your submissions have consumed.
+            </p>
+            <p>
+                <strong
+                    >Unlike the records in section 7, this total is linked to
+                    your account.</strong
+                >
+                It is stored on your own user record and consists only of:
+            </p>
+            <ul>
+                <li>
+                    when your accounting started and when it was last updated;
+                </li>
+                <li>
+                    how many of your submissions actually reached a machine;
+                </li>
+                <li>
+                    how much computing time and scratch storage they used in
+                    total;
+                </li>
+                <li>
+                    a count of how many used each worker size.
+                </li>
+            </ul>
+            <p>
+                It is a <strong>total, not a history</strong>. There is no
+                per-submission entry, so it cannot show what you ran, when you
+                ran it, or what was in it — only how much, added up. Nothing
+                about the content of your research is recorded here, and the
+                figures are visible only to SIVACOR administrators. We do not
+                currently show them to you, and nothing is refused or limited on
+                the basis of them today.
+            </p>
+            <p>
+                <strong>You are not charged for our mistakes.</strong> When a run
+                fails for a reason you could not have caused — a problem
+                downloading the analysis environment, a machine we lost, a defect
+                in our own software — its usage is recorded against an anonymous
+                total for the platform instead of against you.
+            </p>
+            <p>
+                <strong>Retention:</strong> for as long as you hold an account.
+                These figures are part of your user record, so deleting your
+                account deletes them at the same time and by the same action.
+                All the rights in section 10 apply to them normally. Briefly —
+                usually for around twenty minutes, while a machine finishes
+                shutting down — we also hold a small internal note linking your
+                account to that machine so the measurement can be completed; it
+                is deleted as soon as the total is updated.
+            </p>
+            <p>
+                Our legal basis is legitimate interests (Article 6(1)(f)):
+                administering a finite shared resource fairly and reporting on
+                its use to the funder. If we ever introduce usage limits or
+                charging, we will update this policy before doing so.
+            </p>
+        </section>
+
+        <section>
+            <h2>9. Cookies and Browser Storage</h2>
             <p>
                 SIVACOR uses only functional storage — no tracking or
                 advertising cookies:
@@ -305,7 +393,7 @@
         </section>
 
         <section>
-            <h2>9. Your Rights Under GDPR</h2>
+            <h2>10. Your Rights Under GDPR</h2>
             <p>
                 As a data subject you have the following rights, exercisable
                 free of charge:
@@ -348,7 +436,7 @@
         </section>
 
         <section>
-            <h2>10. Changes to This Policy</h2>
+            <h2>11. Changes to This Policy</h2>
             <p>
                 We may update this policy from time to time. Material changes
                 will be announced via a banner on the application. The "Last
