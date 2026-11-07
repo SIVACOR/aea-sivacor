@@ -35,6 +35,7 @@ node e2e/workflow-export.mjs  # export a run's workflow definition and re-import
 node e2e/volume-disk.mjs      # C4: the extra-scratch-disk control, as a non-admin
 node e2e/volume-evidence.mjs  # C4: the peak-workspace hint and the disk_gb round trip
 node e2e/upload-page.mjs      # #43: the Advanced fold, the run-button gate, the single button
+node e2e/image-move.mjs       # dataeditors/ -> sscng/: import rename notice, saved selection (read-only)
 ```
 
 All of them exit non-zero on failure.
