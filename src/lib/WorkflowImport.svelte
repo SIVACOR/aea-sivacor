@@ -2,6 +2,7 @@
     import { createEventDispatcher } from "svelte";
     import {
         getWorkflowSchema,
+        movedImageName,
         volumeCeilingGb,
         volumeRefusal,
         type VolumeQuota,
@@ -76,6 +77,12 @@
     let importMessage: string | null = null;
     /** Schema violations etc., listed in full rather than first-error-only. */
     let importErrors: string[] = [];
+    /**
+     * Images this import renamed because their namespace moved. Shown whether
+     * or not the import then succeeds: the substitution is a change to what the
+     * researcher's file says, and it must never happen out of sight.
+     */
+    let importNotices: string[] = [];
 
     /**
      * Compiled validator for the schema served by the backend. Both the fetch and
@@ -140,6 +147,36 @@
             return values.join(", ");
         }
         return `${values.slice(0, max).join(", ")} (+${values.length - max} more)`;
+    }
+
+    /**
+     * Renames any stage whose image has moved namespace (see movedImageName),
+     * returning the definition to use and one notice per renamed stage.
+     *
+     * Done here rather than refusing the file: every Stata workflow exported
+     * before the move would otherwise be unimportable, and the fix the
+     * researcher would have to make by hand is exactly this one. The notice is
+     * what keeps it from being silent -- the new image is a rebuild, not a copy.
+     */
+    function migrateMovedImages(definition: WorkflowDefinition): {
+        definition: WorkflowDefinition;
+        notices: string[];
+    } {
+        const notices: string[] = [];
+        const stages = definition.stages.map((stage, index) => {
+            const moved = movedImageName(stage.image_name, imagesData);
+            if (moved === null) {
+                return stage;
+            }
+            notices.push(
+                `Step ${index + 1}: "${stage.image_name}" has moved to ` +
+                    `"${moved}" and was replaced. The image was republished ` +
+                    "there, so it is not byte-identical to the one this " +
+                    "workflow was exported with.",
+            );
+            return { ...stage, image_name: moved };
+        });
+        return { definition: { ...definition, stages }, notices };
     }
 
     /**
@@ -273,6 +310,7 @@
     async function importFile(file: File) {
         importMessage = null;
         importErrors = [];
+        importNotices = [];
 
         const name = file.name.toLowerCase();
         if (!ALLOWED_EXTENSIONS.some((ext) => name.endsWith(ext))) {
@@ -317,7 +355,9 @@
 
             // Past validate(), so the shape is the schema's -- and useDefaults
             // has filled in the optional network_isolation.
-            const definition = parsed as WorkflowDefinition;
+            const migrated = migrateMovedImages(parsed as WorkflowDefinition);
+            const definition = migrated.definition;
+            importNotices = migrated.notices;
             const problems = validateAgainstForm(definition);
             if (problems.length > 0) {
                 importErrors = problems;
@@ -447,6 +487,20 @@ resources:${
                 typed by hand, they are never saved in your browser.
             </p>
         </details>
+
+        {#if !isParsing && importNotices.length > 0}
+            <div class="import-status notice" role="status">
+                <span class="material-icons" aria-hidden="true">swap_horiz</span>
+                <div class="error-body">
+                    <strong>Renamed images:</strong>
+                    <ul>
+                        {#each importNotices as notice, index (index)}
+                            <li>{notice}</li>
+                        {/each}
+                    </ul>
+                </div>
+            </div>
+        {/if}
 
         {#if isParsing}
             <div class="import-status" role="status">
@@ -685,6 +739,15 @@ resources:${
         background-color: rgba(244, 67, 54, 0.1);
         border: 1px solid rgba(244, 67, 54, 0.3);
         color: var(--md-error);
+    }
+
+    /* Amber, not green: a renamed image is a change to what the file said,
+       and it should read as something to check rather than as success. */
+    .import-status.notice {
+        margin-bottom: var(--md-spacing-xs);
+        background-color: rgba(var(--md-warning-rgb), 0.1);
+        border: 1px solid rgba(var(--md-warning-rgb), 0.35);
+        color: var(--md-on-surface);
     }
 
     .error-body ul {

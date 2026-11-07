@@ -607,6 +607,42 @@ export function getImageTagsUrl(): string {
 }
 
 /**
+ * Docker Hub namespaces an allow-listed image family has moved out of, mapped
+ * to where it went. The Stata images moved from `dataeditors` to `sscng`
+ * (SIVACOR/sivacor-repo-choice#7), so workflow files exported before that, and
+ * selections saved in this browser, name an image the allow-list no longer has.
+ */
+const MOVED_IMAGE_NAMESPACES: Record<string, string> = {
+    'dataeditors/': 'sscng/',
+};
+
+/**
+ * Where an image that is no longer on the allow-list moved to, or null.
+ *
+ * Only ever an answer when the old name is gone *and* the new one is offered,
+ * so this is a no-op until the allow-list actually switches, and on a
+ * deployment still listing the old namespace. The two are not the same image:
+ * upstream re-pushed rather than mirrored, so the same tag has a different
+ * digest -- which is why a caller should say it made the substitution.
+ * @returns {string | null} The image's current name, or null to leave it alone.
+ */
+export function movedImageName(
+    imageName: string,
+    imagesData: Record<string, string[]>,
+): string | null {
+    if (imageName in imagesData) {
+        return null;
+    }
+    for (const [from, to] of Object.entries(MOVED_IMAGE_NAMESPACES)) {
+        if (imageName.startsWith(from)) {
+            const moved = to + imageName.slice(from.length);
+            return moved in imagesData ? moved : null;
+        }
+    }
+    return null;
+}
+
+/**
  * Generic function to make an authenticated API call.
  *
  * The response shape is whatever the caller declares: `api<Folder[]>(...)`.

@@ -7,6 +7,7 @@
         getVolumeQuota,
         getWorkerSizes,
         grantedVolumeGb,
+        movedImageName,
         volumeCeilingGb,
         volumeRefusal,
         type ApiError,
@@ -369,6 +370,16 @@
         }
     }
 
+    function restoredImage(saved: string | null | undefined): string | null {
+        if (!saved) {
+            return null;
+        }
+        if (availableImages.includes(saved)) {
+            return saved;
+        }
+        return movedImageName(saved, imagesData);
+    }
+
     /**
      * Load user selections from localStorage
      */
@@ -383,11 +394,11 @@
                     // Restore config entries with validation
                     configEntries = parsedConfigs.map((config) => ({
                         id: crypto.randomUUID(), // Generate new IDs
-                        selectedImage:
-                            config.selectedImage &&
-                            availableImages.includes(config.selectedImage)
-                                ? config.selectedImage
-                                : null,
+                        // A saved image whose namespace has since moved is
+                        // carried across rather than dropped (see
+                        // movedImageName). Its tag is kept as saved: the Stata
+                        // move kept every tag name.
+                        selectedImage: restoredImage(config.selectedImage),
                         selectedTag: config.selectedTag || null,
                         executionFileName:
                             config.executionFileName || "main.do",
