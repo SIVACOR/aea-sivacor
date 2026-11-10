@@ -145,11 +145,14 @@ export async function apiGet(endpoint, token) {
  * here and put the original back when they are done.
  */
 export async function setSetting(token, key, value) {
-    // Query parameters, not a request body. Girder's PUT /system/setting takes
-    // key and value as params, and a urlencoded body it never reads comes back
-    // **200 having changed nothing** -- which is how this helper first shipped,
-    // and a scenario whose setup silently no-ops reports the old behaviour as a
-    // failure of the new code.
+    // Query parameters. A urlencoded body works too; a JSON body is the one
+    // Girder's PUT /system/setting answers with **200 having changed nothing**
+    // (measured on Girder 5.0.23; deploy-sivacor ENVIRONMENT.md has the table).
+    // This helper first shipped as a silent no-op, and what that version sent
+    // was never committed. A scenario whose setup silently no-ops reports the
+    // old behaviour as a failure of the new code, hence the read-back below.
+    // A body-less query PUT needs a Content-Length: 0, or Girder answers 411;
+    // Node's fetch sends one, bare `curl -X PUT -G` does not.
     const qs = new URLSearchParams({ key, value: JSON.stringify(value) });
     const r = await fetch(`${API}/system/setting?${qs}`, {
         method: 'PUT',
