@@ -46,14 +46,22 @@ env_secrets:
 // through to the plugin's single-rung default -- and one option cannot test
 // picking. Restored at the end; a crash before then leaves the ladder in place,
 // which is harmless on a stack that never boots a VM.
+//
+// `su_per_hour` is spelled out because the validator writes it back (as
+// `vcpus` when absent), and setSetting's read-back would otherwise see a
+// different value and refuse to start.
 const LADDER = [
-    { memory_gb: 30, flavor: 'm3.medium', vcpus: 8, gated: false },
-    { memory_gb: 60, flavor: 'm3.large', vcpus: 16, gated: false },
-    { memory_gb: 250, flavor: 'm3.2xl', vcpus: 64, gated: true },
+    { memory_gb: 30, flavor: 'm3.medium', vcpus: 8, gated: false, su_per_hour: 8 },
+    { memory_gb: 60, flavor: 'm3.large', vcpus: 16, gated: false, su_per_hour: 16 },
+    { memory_gb: 250, flavor: 'm3.2xl', vcpus: 64, gated: true, su_per_hour: 64 },
 ];
 const setupToken = await getToken();
 const originalSizes = await apiGet('/system/setting?key=sivacor.worker_sizes', setupToken);
 await setSetting(setupToken, 'sivacor.worker_sizes', LADDER);
+// The picker renders only under targeted assignment, which deploy-dev leaves
+// off. Nothing here submits a job, so arming it dispatches nothing.
+const originalTargeted = await apiGet('/system/setting?key=sivacor.targeted_assignment', setupToken);
+await setSetting(setupToken, 'sivacor.targeted_assignment', true);
 
 const { page, close } = await open();
 await resetToRunner(page);
@@ -350,6 +358,7 @@ check('the refused gated import does not move the picker',
 
 await asMember.close();
 await setSetting(setupToken, 'sivacor.worker_sizes', originalSizes);
+await setSetting(setupToken, 'sivacor.targeted_assignment', originalTargeted);
 const failed = checks.filter((c) => !c.ok).length;
 console.log(`\n${checks.length - failed}/${checks.length} passed`);
 process.exit(failed ? 1 : 0);
