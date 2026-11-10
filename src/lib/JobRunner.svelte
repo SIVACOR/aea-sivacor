@@ -4,6 +4,7 @@
     import {
         submitJob,
         getImages,
+        getTargetedAssignment,
         getVolumeQuota,
         getWorkerSizes,
         grantedVolumeGb,
@@ -429,6 +430,13 @@
      */
     async function loadWorkerSizes() {
         try {
+            // Without targeted assignment the fleet never reads the size, so
+            // the picker stays unrendered and the submission says nothing --
+            // the same state as a Girder with no catalogue at all. The
+            // remembered rung is left in localStorage for when it is re-armed.
+            if (!(await getTargetedAssignment())) {
+                return;
+            }
             const catalogue = await getWorkerSizes();
             workerSizes = catalogue.sizes;
             if (workerSizes.length === 0) {
@@ -463,9 +471,18 @@
      * working form behind. `volumeQuota` stays null, no control renders, and the
      * submission asks for no disk -- which is what every submission did before
      * this control existed.
+     *
+     * Without targeted assignment the fleet never creates a volume, and the
+     * server refuses every request, so the quota is reported as not enabled:
+     * the control stays hidden and an imported `disk_gb` is refused up front,
+     * in the server's own words, rather than at submit.
      */
     async function loadVolumeQuota() {
-        volumeQuota = await getVolumeQuota();
+        const [quota, targeted] = await Promise.all([
+            getVolumeQuota(),
+            getTargetedAssignment(),
+        ]);
+        volumeQuota = quota && !targeted ? { ...quota, enabled: false } : quota;
     }
 
     function saveWorkerSize() {
@@ -609,7 +626,13 @@
         // `resources` block -- every workflow exported before this shipped --
         // leaves the current choice alone rather than resetting it: it asked for
         // nothing, so it says nothing about the size.
-        if (typeof definition.resources?.memory_gb === "number") {
+        // Only while there is a picker to hold it: with none (no catalogue, or
+        // no targeted assignment) an imported size would be submitted without
+        // ever being shown.
+        if (
+            typeof definition.resources?.memory_gb === "number" &&
+            workerSizes.length > 0
+        ) {
             selectedMemoryGb = definition.resources.memory_gb;
         }
         // Same rule for disk, and the same reason for the asymmetry: WorkflowImport
@@ -625,7 +648,8 @@
         // but an import is a deliberate act by the user about these fields
         // specifically, so it should land somewhere they can see and check it.
         if (
-            typeof definition.resources?.memory_gb === "number" ||
+            (typeof definition.resources?.memory_gb === "number" &&
+                workerSizes.length > 0) ||
             typeof definition.resources?.disk_gb === "number" ||
             (definition.env_secrets ?? []).length > 0
         ) {
