@@ -371,6 +371,33 @@ export function getCurrentUser(): User | null {
     return currentUser;
 }
 
+/** Cached so the settings fetch happens once per page load. */
+let targetedAssignmentPromise: Promise<boolean> | null = null;
+
+/**
+ * Whether the fleet controller places submissions itself, per the backend's
+ * `sivacor.targeted_assignment` setting.
+ *
+ * Only then does a worker-size choice mean anything: on the shared dispatch
+ * queue whichever worker is up takes the submission, whatever size it asked
+ * for, so offering the picker there would be a promise nothing keeps.
+ *
+ * `true` unless the setting says `false` explicitly. A Girder that predates
+ * the key being public, or a failed settings call, keeps the picker the UI has
+ * always shown rather than silently dropping a choice the server may honour.
+ */
+export function getTargetedAssignment(): Promise<boolean> {
+    if (!targetedAssignmentPromise) {
+        targetedAssignmentPromise = getPublicSettings()
+            .then((settings) => settings?.['sivacor.targeted_assignment'] !== false)
+            .catch((error) => {
+                console.warn('Could not load the targeted-assignment setting:', error);
+                return true;
+            });
+    }
+    return targetedAssignmentPromise;
+}
+
 /** Cached so the settings fetch happens once, not on every upload. */
 let uploadsFolderNamePromise: Promise<string> | null = null;
 
