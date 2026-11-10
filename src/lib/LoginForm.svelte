@@ -3,7 +3,11 @@
     import { page } from "$app/stores";
     import { goto } from "$app/navigation";
     import { browser } from "$app/environment";
-    import { fetchOAuthProviders, type OAuthProvider } from "./api";
+    import {
+        fetchOAuthProviders,
+        supportEmail,
+        type OAuthProvider,
+    } from "./api";
     import { createEventDispatcher } from "svelte";
 
     const dispatch = createEventDispatcher();
@@ -108,7 +112,7 @@
         const body = encodeURIComponent(
             `Hello SIVACOR Support Team,\n\nI'm experiencing an authentication issue with the SIVACOR application.\n\nError details:\n${error}\n\nPlease assist me with resolving this issue.\n\nThank you,`,
         );
-        window.location.href = `mailto:support@sivacor.org?subject=${subject}&body=${body}`;
+        window.location.href = `mailto:${$supportEmail}?subject=${subject}&body=${body}`;
     }
 </script>
 

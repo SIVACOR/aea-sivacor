@@ -5,6 +5,7 @@
         deleteItem,
         initiateFileUpload,
         listPendingUploads,
+        supportEmail,
         uploadFileChunk,
         type PendingUpload,
         type UploadedFile,
@@ -300,7 +301,7 @@
                         " stores a fresh copy. The incomplete one is listed under" +
                         " previous uploads below, where you can delete it. If this" +
                         " happens twice for the same file, contact" +
-                        " support@sivacor.org.",
+                        ` ${$supportEmail}.`,
                 );
             }
             uploadedItemId = lastChunk.itemId ?? null;
