@@ -6,6 +6,7 @@
         checkAuthentication,
         setAuthToken,
         getPublicSettings,
+        loadSupportEmail,
     } from "../lib/api";
     import { authLoading } from "../lib/stores";
     import Banner from "../lib/Banner.svelte";
@@ -68,6 +69,7 @@
     onMount(async () => {
         // Load the maintenance banner (independent of auth).
         loadBanner();
+        loadSupportEmail();
 
         const url = new URL($page.url);
         const tokenFromUrl = url.searchParams.get("girderToken");

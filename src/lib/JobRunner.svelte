@@ -8,6 +8,7 @@
         getWorkerSizes,
         grantedVolumeGb,
         movedImageName,
+        supportEmail,
         volumeCeilingGb,
         volumeRefusal,
         type ApiError,
@@ -181,7 +182,7 @@
             : null;
     // Live, so the reason appears while the number is still being typed rather
     // than only after a rejected submit.
-    $: volumeProblem = volumeRefusal(volumeQuota, requestedDiskGb);
+    $: volumeProblem = volumeRefusal(volumeQuota, requestedDiskGb, $supportEmail);
 
     /** How much of a rung's RAM the analysis actually gets, per S1 property 3. */
     const MEMORY_HEADROOM_GB = 2;
@@ -1088,8 +1089,8 @@
                             {#if gatedSizes.length > 0}
                                 Sizes marked <em>(by request)</em> need
                                 approval: email
-                                <a href="mailto:support@sivacor.org"
-                                    >support@sivacor.org</a
+                                <a href="mailto:{$supportEmail}"
+                                    >{$supportEmail}</a
                                 >.
                             {/if}
                         </div>
@@ -1195,15 +1196,15 @@
                                 A scratch volume for submissions whose data will
                                 not fit a worker's own disk. It needs approval
                                 per account: email
-                                <a href="mailto:support@sivacor.org"
-                                    >support@sivacor.org</a
+                                <a href="mailto:{$supportEmail}"
+                                    >{$supportEmail}</a
                                 >, saying roughly how much space your package
                                 needs.
                             {:else if volumeUnfunded}
                                 Approved for your account, but this deployment
                                 has no space budgeted for it right now. Contact
-                                <a href="mailto:support@sivacor.org"
-                                    >support@sivacor.org</a
+                                <a href="mailto:{$supportEmail}"
+                                    >{$supportEmail}</a
                                 >.
                             {:else}
                                 Leave empty to use the worker's own {ROOT_DISK_GB}

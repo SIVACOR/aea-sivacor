@@ -1,4 +1,4 @@
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { user, type User } from './stores';
 import Cookies from 'js-cookie';
 import { env } from '$env/dynamic/public';
@@ -272,7 +272,11 @@ export function volumeCeilingGb(quota: VolumeQuota | null): number {
  * build can meet a Girder that predates the endpoint, and in that case the
  * server is the only thing that can rule on the request.
  */
-export function volumeRefusal(quota: VolumeQuota | null, gb: number | null): string | null {
+export function volumeRefusal(
+    quota: VolumeQuota | null,
+    gb: number | null,
+    support: string,
+): string | null {
     if (gb === null || quota === null) return null;
     if (!Number.isInteger(gb) || gb <= 0) {
         return 'Extra scratch disk must be a whole number of gigabytes, or left empty for none.';
@@ -281,14 +285,14 @@ export function volumeRefusal(quota: VolumeQuota | null, gb: number | null): str
         return 'Extra scratch disk is not available on this deployment.';
     }
     if (quota.max_gb <= 0) {
-        return 'Extra scratch disk needs approval. Contact support@sivacor.org to request it.';
+        return `Extra scratch disk needs approval. Contact ${support} to request it.`;
     }
     const granted = grantedVolumeGb(quota, gb);
     if (granted > quota.max_gb) {
         return (
             `${gb} GB of extra scratch disk is more than your ${quota.max_gb} GB ` +
             `limit. Ask for ${quota.max_gb} GB or less, or contact ` +
-            'support@sivacor.org to raise it.'
+            `${support} to raise it.`
         );
     }
     if (granted > quota.deployment_gb) {
@@ -298,7 +302,7 @@ export function volumeRefusal(quota: VolumeQuota | null, gb: number | null): str
         // something they already have.
         return (
             `${gb} GB of extra scratch disk is more than this deployment currently ` +
-            `has available (${quota.deployment_gb} GB). Contact support@sivacor.org.`
+            `has available (${quota.deployment_gb} GB). Contact ${support}.`
         );
     }
     return null;
@@ -307,6 +311,40 @@ export function volumeRefusal(quota: VolumeQuota | null, gb: number | null): str
 // API Base URL from environment variable with fallback for development
 const BASE_URL = env.PUBLIC_SIVACOR_API_URL || 'https://girder.sivacor.org/api/v1';
 export const JOB_POLLING_INTERVAL = 5000; // 5 seconds
+
+/** The setting's own default, and what production uses. */
+export const DEFAULT_SUPPORT_EMAIL = 'support@sivacor.org';
+
+/**
+ * The address researchers are told to write to, per the backend's
+ * `sivacor.support_email` setting, so a deployment other than SIVACOR's does
+ * not send its users to SIVACOR's mailbox.
+ *
+ * Starts at the default and stays there when the settings call fails or the
+ * key is absent (a Girder older than girder-sivacor#155), so Contact Support
+ * never becomes an empty `mailto:`. Not `core.contact_email_address`: that is
+ * also public, but it is the mail sender, not the support mailbox.
+ */
+export const supportEmail = writable<string>(DEFAULT_SUPPORT_EMAIL);
+
+let supportEmailPromise: Promise<void> | null = null;
+
+/** Loads `supportEmail` from the public settings, once per page load. */
+export function loadSupportEmail(): Promise<void> {
+    if (!supportEmailPromise) {
+        supportEmailPromise = getPublicSettings()
+            .then((settings) => {
+                const address = settings?.['sivacor.support_email'];
+                if (typeof address === 'string' && address.trim()) {
+                    supportEmail.set(address.trim());
+                }
+            })
+            .catch((error) => {
+                console.warn('Could not load the support address:', error);
+            });
+    }
+    return supportEmailPromise;
+}
 
 /**
  * Fetches the list of OAuth providers.

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { user } from "../lib/stores";
-    import { logout } from "../lib/api";
+    import { logout, supportEmail } from "../lib/api";
     import LoginForm from "../lib/LoginForm.svelte";
     import JobMonitor from "../lib/JobMonitor.svelte";
     import { page } from "$app/stores";
@@ -123,7 +123,7 @@
         const body = encodeURIComponent(
             `Hello SIVACOR Support Team,\n\nI have a question/need assistance with the SIVACOR application.\n\nUser: ${$user ? `${$user.firstName} ${$user.lastName}` : "Anonymous"}\n\nDescription of my question/issue:\n[Please describe your question or issue here]\n\nThank you for your assistance,`,
         );
-        window.location.href = `mailto:support@sivacor.org?subject=${subject}&body=${body}`;
+        window.location.href = `mailto:${$supportEmail}?subject=${subject}&body=${body}`;
     }
 
     /**
@@ -253,7 +253,7 @@
                 <div class="support-info">
                     <div class="support-item">
                         <span class="material-icons">email</span>
-                        <span>support@sivacor.org</span>
+                        <span>{$supportEmail}</span>
                     </div>
                     <div class="support-item">
                         <span class="material-icons">schedule</span>

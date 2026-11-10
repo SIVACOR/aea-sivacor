@@ -3,6 +3,7 @@
     import {
         getWorkflowSchema,
         movedImageName,
+        supportEmail,
         volumeCeilingGb,
         volumeRefusal,
         type VolumeQuota,
@@ -234,7 +235,7 @@
             } else if (!match.selectable) {
                 problems.push(
                     `resources: the ${requestedMemory} GB worker is not ` +
-                        "self-service. Email support@sivacor.org to request " +
+                        `self-service. Email ${$supportEmail} to request ` +
                         `it, or choose one of: ${summarize(offered)}.`,
                 );
             }
@@ -246,7 +247,7 @@
         // then the server is the only thing that can rule on it.
         const requestedDisk = definition.resources?.disk_gb;
         if (requestedDisk !== undefined) {
-            const refusal = volumeRefusal(volumeQuota, requestedDisk);
+            const refusal = volumeRefusal(volumeQuota, requestedDisk, $supportEmail);
             if (refusal) {
                 problems.push(`resources: ${refusal}`);
             }
