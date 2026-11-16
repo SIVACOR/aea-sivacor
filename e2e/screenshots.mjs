@@ -289,6 +289,12 @@ async function phaseRun() {
  *  - `run` drives the deploy-dev **admin**, who bypasses the group gate by
  *    design, so the two "by request" rungs would render selectable. This phase
  *    drives a member, which is what the docs describe.
+ *
+ * The scratch-disk control renders only while `sivacor.volumes_enabled` is on,
+ * and worker size and scratch disk both vanish without targeted assignment
+ * (#53). deploy-dev defaults volumes off, so the shot used to depend on whether
+ * something else (volume-disk.mjs) had last left them on -- and once silently
+ * dropped the section. Pin both, like the ladder, and restore them.
  */
 const LADDER = [
     { memory_gb: 30, flavor: 'm3.medium', vcpus: 8, gated: false },
@@ -298,12 +304,20 @@ const LADDER = [
 ];
 
 async function phaseAdvanced() {
-    console.log('\n[advanced] seeding the production size ladder, shooting as a member');
+    console.log('\n[advanced] seeding the production size ladder and volumes, shooting as a member');
     const token = await girderToken();
-    const original = await fetch(`${API}/system/setting?key=sivacor.worker_sizes`, {
-        headers: { 'Girder-Token': token },
-    }).then((r) => r.json());
-    await setSetting('sivacor.worker_sizes', LADDER, token);
+    const seeds = {
+        'sivacor.worker_sizes': LADDER,
+        'sivacor.volumes_enabled': true,
+        'sivacor.targeted_assignment': true,
+    };
+    const original = {};
+    for (const key of Object.keys(seeds)) {
+        original[key] = await fetch(`${API}/system/setting?key=${key}`, {
+            headers: { 'Girder-Token': token },
+        }).then((r) => r.json());
+    }
+    for (const [key, value] of Object.entries(seeds)) await setSetting(key, value, token);
     const { page, close } = await open({ headless: true, token: await getMemberToken(token) });
     try {
         await page.setViewportSize(VIEWPORT);
@@ -327,8 +341,10 @@ async function phaseAdvanced() {
         }
         await shotOf(page, 'details.advanced-section', 'sivacor-advanced-panel.png');
     } finally {
-        await setSetting('sivacor.worker_sizes', original, token).catch(() => {});
-        console.log('  · restored sivacor.worker_sizes');
+        for (const [key, value] of Object.entries(original)) {
+            await setSetting(key, value, token).catch(() => {});
+        }
+        console.log(`  · restored ${Object.keys(original).join(', ')}`);
         await close();
     }
 }
