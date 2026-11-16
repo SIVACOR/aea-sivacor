@@ -871,6 +871,28 @@ export async function getImages(): Promise<Record<string, string[]>> {
     return response;
 }
 
+/** What an image runs, as /sivacor/image_catalog reports it. */
+export interface ImageCatalogEntry {
+    /** E.g. `['stata', 'python']`; empty for an image the server cannot classify. */
+    software: string[];
+}
+
+/**
+ * Fetches what software each allowed image runs, for labelling the picker.
+ *
+ * Purely decorative, so any failure -- including a 404 from a Girder that
+ * predates the endpoint, since the UI and the API deploy separately -- yields
+ * an empty catalogue, and the picker falls back to the plain list.
+ * @returns {Promise<Record<string, ImageCatalogEntry>>} Keyed by image name.
+ */
+export async function getImageCatalog(): Promise<Record<string, ImageCatalogEntry>> {
+    try {
+        return (await api<Record<string, ImageCatalogEntry>>('/sivacor/image_catalog')) ?? {};
+    } catch {
+        return {};
+    }
+}
+
 /**
  * Fetches the JSON schema a workflow definition must satisfy -- the very schema
  * /sivacor/submit_job validates its body against. Fetched rather than duplicated
