@@ -5,6 +5,7 @@
     import {
         submitJob,
         getImages,
+        getImageCatalog,
         getTargetedAssignment,
         getVolumeQuota,
         getWorkerSizes,
@@ -14,6 +15,7 @@
         volumeCeilingGb,
         volumeRefusal,
         type ApiError,
+        type ImageCatalogEntry,
         type PreviousRunPeaks,
         type VolumeQuota,
         type WorkerSize,
@@ -40,6 +42,55 @@
     /** @type {string[]} */
     let availableImages: string[] = []; // Array of image names
     let imagesLoading = true;
+
+    // What each image runs, from /sivacor/image_catalog -- the server's own
+    // classification, the one that picks the entrypoint, so a label here
+    // cannot disagree with how the image is run. Empty when the server is too
+    // old to have the endpoint, which leaves the picker a plain list.
+    let imageCatalog: Record<string, ImageCatalogEntry> = {};
+
+    // Display names and order for the picker's groups. A combination not
+    // listed here (or an image the server could not classify) still shows,
+    // in "Other", so a new image is never hidden by a stale table.
+    const SOFTWARE_LABELS: Record<string, string> = {
+        stata: "Stata",
+        python: "Python",
+        r: "R",
+        matlab: "MATLAB",
+        julia: "Julia",
+    };
+    const GROUP_ORDER = ["stata", "stata+python", "r", "matlab", "julia"];
+
+    function imageSoftware(image: string | null): string[] {
+        return (image && imageCatalog[image]?.software) || [];
+    }
+
+    function groupLabel(key: string): string {
+        if (!key) return "Other";
+        return key
+            .split("+")
+            .map((s) => SOFTWARE_LABELS[s] ?? s)
+            .join(" + ");
+    }
+
+    // [label, images] pairs in GROUP_ORDER, then any unlisted combination,
+    // then "Other" last. Null without a catalogue: the picker stays flat.
+    $: imageGroups = (() => {
+        if (Object.keys(imageCatalog).length === 0) return null;
+        const groups: Record<string, string[]> = {};
+        for (const image of availableImages) {
+            const key = imageSoftware(image).join("+");
+            (groups[key] ??= []).push(image);
+        }
+        const rank = (key: string) => {
+            if (!key) return Infinity;
+            const i = GROUP_ORDER.indexOf(key);
+            return i === -1 ? GROUP_ORDER.length : i;
+        };
+        return Object.entries(groups)
+            .sort(([a], [b]) => rank(a) - rank(b))
+            .map(([key, images]) => [groupLabel(key), images] as const);
+    })();
 
     // State for the file upload (will hold the ID when upload is done)
     /** @type {string | null} */
@@ -522,7 +573,11 @@
         // neither can fail the other.
         await Promise.all([loadWorkerSizes(), loadVolumeQuota()]);
         try {
-            imagesData = await getImages();
+            // The catalogue never throws, so it cannot fail the image list.
+            [imagesData, imageCatalog] = await Promise.all([
+                getImages(),
+                getImageCatalog(),
+            ]);
             availableImages = Object.keys(imagesData);
 
             if (availableImages.length > 0) {
@@ -916,9 +971,18 @@
                         <div class="image-pair">
                             <!-- Docker Image Selection -->
                             <div class="input-group">
-                                <label for="image-select-{entry.id}">
-                                    Docker Image
-                                </label>
+                                <div class="label-row">
+                                    <label for="image-select-{entry.id}">
+                                        Docker Image
+                                    </label>
+                                    {#each imageSoftware(entry.selectedImage) as software (software)}
+                                        <span
+                                            class="software-badge software-{software}"
+                                            >{SOFTWARE_LABELS[software] ??
+                                                software}</span
+                                        >
+                                    {/each}
+                                </div>
                                 {#if imagesLoading}
                                     <div class="loading-state">
                                         <div class="md-spinner"></div>
@@ -937,9 +1001,21 @@
                                         disabled={isJobRunning}
                                     >
                                         <option value={null}>Select Image</option>
-                                        {#each availableImages as image (image)}
-                                            <option value={image}>{image}</option>
-                                        {/each}
+                                        {#if imageGroups}
+                                            {#each imageGroups as [label, images] (label)}
+                                                <optgroup {label}>
+                                                    {#each images as image (image)}
+                                                        <option value={image}
+                                                            >{image}</option
+                                                        >
+                                                    {/each}
+                                                </optgroup>
+                                            {/each}
+                                        {:else}
+                                            {#each availableImages as image (image)}
+                                                <option value={image}>{image}</option>
+                                            {/each}
+                                        {/if}
                                     </select>
                                 {:else}
                                     <div class="error-state">
@@ -1607,6 +1683,49 @@
         color: var(--md-on-surface-variant);
         text-transform: uppercase;
         letter-spacing: 0.5px;
+    }
+
+    /* The label plus the selected image's software badges. Held to the
+       label's own height so the Image Tag column beside it stays level. */
+    .label-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        height: 1.25em;
+    }
+
+    .software-badge {
+        flex: none;
+        padding: 0 6px;
+        border-radius: var(--md-radius-full);
+        font-size: 0.6875rem;
+        font-weight: 600;
+        line-height: 1.5;
+        color: #fff;
+        background-color: var(--md-on-surface-variant);
+    }
+
+    /* Fixed per-stack hues, so the same software is the same colour on every
+       stage row. Each is dark enough for white text at this size. */
+    .software-stata {
+        background-color: #1a5f91;
+    }
+
+    .software-python {
+        background-color: #806400;
+    }
+
+    .software-r {
+        background-color: #00695c;
+    }
+
+    .software-matlab {
+        background-color: #b3470b;
+    }
+
+    .software-julia {
+        background-color: #7a3e9d;
     }
 
     .loading-state {
