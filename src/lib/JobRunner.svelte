@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount, tick } from "svelte";
+    import { page } from "$app/stores";
     import { createEventDispatcher } from "svelte";
     import {
         submitJob,
@@ -23,6 +24,15 @@
     import WorkflowImport from "./WorkflowImport.svelte";
     import { hasInvalidOrcidEmail, user } from "./stores";
     import EmailUpdateModal from "./EmailUpdateModal.svelte";
+
+    // Same rule as LoginForm's getDocsUrl: swap the first hostname label for
+    // "docs", so submit.sivacor.org links to docs.sivacor.org and each
+    // deployment links to its own docs.
+    $: imagesDocsUrl = (() => {
+        const url = new URL($page.url);
+        const host = url.hostname.replace(/^[^.]*\./, "docs.");
+        return `${url.protocol}//${host}${url.port ? `:${url.port}` : ""}/docs/images`;
+    })();
 
     // State for the dropdowns data
     /** @type {Record<string, string[]>} */
@@ -901,72 +911,83 @@
                 <div class="config-row">
                     <div class="step-badge">{index + 1}</div>
                     <div class="config-widgets">
-                        <!-- Docker Image Selection -->
-                        <div class="input-group">
-                            <label for="image-select-{entry.id}">
-                                Docker Image
-                            </label>
-                            {#if imagesLoading}
-                                <div class="loading-state">
-                                    <div class="md-spinner"></div>
-                                    <span>Loading...</span>
-                                </div>
-                            {:else if availableImages.length > 0}
-                                <select
-                                    id="image-select-{entry.id}"
-                                    bind:value={entry.selectedImage}
-                                    on:change={() =>
-                                        entry.selectedImage &&
-                                        updateEntryTags(
-                                            entry.id,
-                                            entry.selectedImage,
-                                        )}
-                                    disabled={isJobRunning}
-                                >
-                                    <option value={null}>Select Image</option>
-                                    {#each availableImages as image (image)}
-                                        <option value={image}>{image}</option>
-                                    {/each}
-                                </select>
-                            {:else}
-                                <div class="error-state">
-                                    <span class="material-icons">warning</span>
-                                    <span>No images available</span>
-                                </div>
-                            {/if}
-                        </div>
+                        <!-- One tip for both: the docs page covers the
+                             images and their tags together. -->
+                        <div class="image-pair">
+                            <!-- Docker Image Selection -->
+                            <div class="input-group">
+                                <label for="image-select-{entry.id}">
+                                    Docker Image
+                                </label>
+                                {#if imagesLoading}
+                                    <div class="loading-state">
+                                        <div class="md-spinner"></div>
+                                        <span>Loading...</span>
+                                    </div>
+                                {:else if availableImages.length > 0}
+                                    <select
+                                        id="image-select-{entry.id}"
+                                        bind:value={entry.selectedImage}
+                                        on:change={() =>
+                                            entry.selectedImage &&
+                                            updateEntryTags(
+                                                entry.id,
+                                                entry.selectedImage,
+                                            )}
+                                        disabled={isJobRunning}
+                                    >
+                                        <option value={null}>Select Image</option>
+                                        {#each availableImages as image (image)}
+                                            <option value={image}>{image}</option>
+                                        {/each}
+                                    </select>
+                                {:else}
+                                    <div class="error-state">
+                                        <span class="material-icons">warning</span>
+                                        <span>No images available</span>
+                                    </div>
+                                {/if}
+                            </div>
 
-                        <!-- Image Tag Selection -->
-                        <div class="input-group">
-                            <label for="tag-select-{entry.id}">
-                                Image Tag
-                            </label>
-                            {#if imagesLoading}
-                                <div class="loading-state">
-                                    <div class="md-spinner"></div>
-                                    <span>Loading...</span>
-                                </div>
-                            {:else if entry.selectedImage && imagesData[entry.selectedImage]?.length > 0}
-                                <select
-                                    id="tag-select-{entry.id}"
-                                    bind:value={entry.selectedTag}
-                                    disabled={isJobRunning ||
-                                        !entry.selectedImage}
-                                >
-                                    {#each imagesData[entry.selectedImage] as tag (tag)}
-                                        <option value={tag}>{tag}</option>
-                                    {/each}
-                                </select>
-                            {:else if entry.selectedImage}
-                                <div class="error-state">
-                                    <span class="material-icons">warning</span>
-                                    <span>No tags available</span>
-                                </div>
-                            {:else}
-                                <select disabled class="disabled-select">
-                                    <option>Select an image first</option>
-                                </select>
-                            {/if}
+                            <!-- Image Tag Selection -->
+                            <div class="input-group">
+                                <label for="tag-select-{entry.id}">
+                                    Image Tag
+                                </label>
+                                {#if imagesLoading}
+                                    <div class="loading-state">
+                                        <div class="md-spinner"></div>
+                                        <span>Loading...</span>
+                                    </div>
+                                {:else if entry.selectedImage && imagesData[entry.selectedImage]?.length > 0}
+                                    <select
+                                        id="tag-select-{entry.id}"
+                                        bind:value={entry.selectedTag}
+                                        disabled={isJobRunning ||
+                                            !entry.selectedImage}
+                                    >
+                                        {#each imagesData[entry.selectedImage] as tag (tag)}
+                                            <option value={tag}>{tag}</option>
+                                        {/each}
+                                    </select>
+                                {:else if entry.selectedImage}
+                                    <div class="error-state">
+                                        <span class="material-icons">warning</span>
+                                        <span>No tags available</span>
+                                    </div>
+                                {:else}
+                                    <select disabled class="disabled-select">
+                                        <option>Select an image first</option>
+                                    </select>
+                                {/if}
+                            </div>
+                            <div class="input-hint">
+                                💡 See <a
+                                    href={imagesDocsUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer">documentation</a
+                                > for details on available software
+                            </div>
                         </div>
 
                         <!-- Main Filename -->
@@ -1691,6 +1712,25 @@
         color: var(--md-on-surface);
     }
 
+    /* Spans the image and tag columns so their shared tip can sit under both
+       while staying level with the Main Filename tip in the next column. */
+    .image-pair {
+        grid-column: span 2;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        column-gap: var(--md-spacing-sm);
+        row-gap: 4px; /* .input-group's gap, which .input-hint's margin assumes */
+        min-width: 0;
+    }
+
+    .image-pair .input-hint {
+        grid-column: 1 / -1;
+    }
+
+    .input-hint a {
+        color: var(--md-primary);
+    }
+
     .toggle-group {
         width: 100px;
         justify-content: flex-start;
@@ -2061,6 +2101,11 @@
         .config-widgets {
             grid-template-columns: 1fr;
             gap: var(--md-spacing-sm);
+        }
+
+        .image-pair {
+            grid-column: auto;
+            grid-template-columns: 1fr;
         }
 
         .config-row {
