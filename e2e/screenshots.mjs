@@ -120,6 +120,18 @@ async function shotUnion(page, selectors, name, pad = 8) {
     return true;
 }
 
+/** Outline `selector` for the duration of `fn`, so a shot can point at it. */
+async function withHighlight(page, selector, fn) {
+    const style = await page.addStyleTag({
+        content: `${selector} { outline: 6px solid #f5c400; outline-offset: 6px; border-radius: 12px; }`,
+    });
+    try {
+        return await fn();
+    } finally {
+        await style.evaluate((el) => el.remove());
+    }
+}
+
 async function girderToken() {
     const res = await fetch(`${API}/user/authentication`, {
         headers: { Authorization: 'Basic ' + Buffer.from(`${ADMIN.login}:${ADMIN.password}`).toString('base64') },
@@ -269,7 +281,14 @@ async function phaseRun() {
         await waitTerminal(page, 600000);
         await page.waitForTimeout(2500);
         await shot(page, 'sivacor-running-job-success.png');
-        await shotOf(page, '.files-section', 'sivacor-screenshot.png');
+        await shotOf(page, '.files-section', 'sivacor-downloadable-files.png');
+        await shotOf(page, '.job-monitor-container', 'sivacor-completed-run-2.png');
+        // Step 2 points the reader at the per-stage statistics. This shot used
+        // to be hand-annotated with an arrow, and so went stale with every UI
+        // change; an outline drawn here keeps it reproducible.
+        await withHighlight(page, '.performance-section', () =>
+            shotOf(page, '.job-monitor-container', 'sivacor-completed-run-full-highlight.png')
+        );
         await shotOf(page, '.result-section.success', 'sivacor-completed-delete.png');
     } finally {
         await close();
@@ -364,6 +383,10 @@ async function phaseFailed() {
         await waitTerminal(page, 600000);
         await page.waitForTimeout(2500);
         await shot(page, 'sivacor-failed.png');
+        // The logs a failed run leaves to download, with the metrics under them.
+        if (!(await shotUnion(page, ['.files-section', '.performance-section'], 'sivacor-failed-part2.png', 16))) {
+            await shotOf(page, '.files-section', 'sivacor-failed-part2.png');
+        }
     } finally {
         await close();
     }
