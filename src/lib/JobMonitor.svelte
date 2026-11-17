@@ -1174,7 +1174,7 @@
                                     {isLogsVisible ? "expand_less" : "expand_more"}
                                 </span>
                                 <span class="logs-toggle-text">
-                                    Live Container Logs
+                                    Live Output
                                     {#if streamingLogs.length > 0}
                                         <span class="logs-count"
                                             >({streamingLogs.length})</span
@@ -1220,7 +1220,7 @@
                                                 >hourglass_empty</span
                                             >
                                             <span
-                                                >Waiting for container logs...</span
+                                                >Waiting for output...</span
                                             >
                                         </div>
                                     {:else}
@@ -1480,8 +1480,8 @@
                             <p class="files-note">
                                 The workflow definition re-creates this run's
                                 steps in the submission form — hand it to a
-                                colleague instead of dictating image names and
-                                tags.
+                                colleague instead of dictating environment names
+                                and versions.
                             </p>
                         {/if}
                     </div>

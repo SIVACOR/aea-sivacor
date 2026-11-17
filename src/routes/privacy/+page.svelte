@@ -55,7 +55,7 @@
                     </tr>
                     <tr>
                         <td
-                            >Last-used job configuration (image, tag, filename)</td
+                            >Last-used job configuration (software environment, version, filename)</td
                         >
                         <td>Saved automatically after job submission</td>
                         <td
@@ -373,8 +373,8 @@
                     <strong
                         ><code>sivacor_config_entries</code> (localStorage):</strong
                     >
-                    Remembers your last-used Docker image, tag, and filename to pre-fill
-                    the job submission form. Stored only on your device.
+                    Remembers your last-used software environment, version, and
+                    filename to pre-fill the job submission form. Stored only on your device.
                 </li>
                 <li>
                     <strong

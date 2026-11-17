@@ -171,7 +171,7 @@
             }
             notices.push(
                 `Step ${index + 1}: "${stage.image_name}" has moved to ` +
-                    `"${moved}" and was replaced. The image was republished ` +
+                    `"${moved}" and was replaced. The environment was republished ` +
                     "there, so it is not byte-identical to the one this " +
                     "workflow was exported with.",
             );
@@ -202,12 +202,12 @@
             }
             if (!knownImages.includes(stage.image_name)) {
                 problems.push(
-                    `${step}: unknown image "${stage.image_name}". ` +
-                        "Pick a supported one from the Docker Image list below.",
+                    `${step}: unknown software environment "${stage.image_name}". ` +
+                        "Pick a supported one from the Software Environment list below.",
                 );
             } else if (!imagesData[stage.image_name].includes(stage.image_tag)) {
                 problems.push(
-                    `${step}: image "${stage.image_name}" has no tag ` +
+                    `${step}: software environment "${stage.image_name}" has no version ` +
                         `"${stage.image_tag}". Available: ` +
                         `${summarize(imagesData[stage.image_name])}.`,
                 );
@@ -493,7 +493,7 @@ resources:${
             <div class="import-status notice" role="status">
                 <span class="material-icons" aria-hidden="true">swap_horiz</span>
                 <div class="error-body">
-                    <strong>Renamed images:</strong>
+                    <strong>Renamed environments:</strong>
                     <ul>
                         {#each importNotices as notice, index (index)}
                             <li>{notice}</li>

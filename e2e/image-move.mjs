@@ -70,7 +70,7 @@ let text = await importFile(
     ),
 );
 check('old dataeditors workflow imports', /Imported 2 steps/.test(text));
-check('the rename is announced', /Renamed images:/.test(text));
+check('the rename is announced', /Renamed environments:/.test(text));
 check('the notice names the old and new image',
     text.includes('"dataeditors/stata18_5-mp" has moved to "sscng/stata18_5-mp"'));
 check('the notice says the image is not identical', /not byte-identical/.test(text));
@@ -96,8 +96,8 @@ text = await importFile(
 );
 check('a missing tag is still refused', /could not be imported/.test(text));
 check('the refusal names the new image',
-    /image "sscng\/stata18_5-mp" has no tag "1999-01-01"/.test(text));
-check('the rename is announced on a refusal too', /Renamed images:/.test(text));
+    /software environment "sscng\/stata18_5-mp" has no version "1999-01-01"/.test(text));
+check('the rename is announced on a refusal too', /Renamed environments:/.test(text));
 
 // -- 3. while the old name is still listed, nothing is touched ------------
 allowList = BOTH;
@@ -113,7 +113,7 @@ text = await importFile(
     ),
 );
 check('imports unchanged while dataeditors is listed', /Imported 1 step/.test(text));
-check('no rename notice then', !/Renamed images:/.test(text));
+check('no rename notice then', !/Renamed environments:/.test(text));
 images = await selected('image');
 check('form keeps the old image', images[0] === 'dataeditors/stata18_5-mp', JSON.stringify(images));
 
