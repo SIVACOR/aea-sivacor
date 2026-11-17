@@ -618,7 +618,7 @@
             if (error instanceof Error) {
                 jobErrorMessage = error.message;
             } else {
-                jobErrorMessage = "Failed to load available images.";
+                jobErrorMessage = "Failed to load available software environments.";
             }
         } finally {
             imagesLoading = false;
@@ -857,7 +857,7 @@
             }
             if (!entry.selectedImage || !entry.selectedTag) {
                 await failValidation(
-                    `${step}Please select both an image and a tag.`,
+                    `${step}Please select both a software environment and a version.`,
                 );
                 return;
             }
@@ -874,7 +874,7 @@
 
         isJobRunning = true;
         const fullImageName = `${firstEntry.selectedImage}:${firstEntry.selectedTag}`;
-        jobStatusMessage = `Starting job for image: ${fullImageName} with file: ${firstEntry.executionFileName}...`;
+        jobStatusMessage = `Starting job in ${fullImageName} with file: ${firstEntry.executionFileName}...`;
 
         try {
             // Submit every step: the loop above proved they are all complete,
@@ -941,8 +941,8 @@
             <h3>New Submission</h3>
         </div>
         <p class="runner-description">
-            Upload a file, select Docker image and tag, then specify your main
-            execution file — or import the whole workflow from a YAML/JSON file.
+            Upload a file, choose a software environment and version, then specify
+            your main execution file — or import the whole workflow from a YAML/JSON file.
         </p>
     </div>
 
@@ -969,11 +969,11 @@
                         <!-- One tip for both: the docs page covers the
                              images and their tags together. -->
                         <div class="image-pair">
-                            <!-- Docker Image Selection -->
+                            <!-- Software Environment (image) Selection -->
                             <div class="input-group">
                                 <div class="label-row">
                                     <label for="image-select-{entry.id}">
-                                        Docker Image
+                                        Software Environment
                                     </label>
                                     {#each imageSoftware(entry.selectedImage) as software (software)}
                                         <span
@@ -1000,7 +1000,7 @@
                                             )}
                                         disabled={isJobRunning}
                                     >
-                                        <option value={null}>Select Image</option>
+                                        <option value={null}>Select an environment</option>
                                         {#if imageGroups}
                                             {#each imageGroups as [label, images] (label)}
                                                 <optgroup {label}>
@@ -1020,15 +1020,15 @@
                                 {:else}
                                     <div class="error-state">
                                         <span class="material-icons">warning</span>
-                                        <span>No images available</span>
+                                        <span>No environments available</span>
                                     </div>
                                 {/if}
                             </div>
 
-                            <!-- Image Tag Selection -->
+                            <!-- Version (image tag) Selection -->
                             <div class="input-group">
                                 <label for="tag-select-{entry.id}">
-                                    Image Tag
+                                    Version
                                 </label>
                                 {#if imagesLoading}
                                     <div class="loading-state">
@@ -1049,11 +1049,11 @@
                                 {:else if entry.selectedImage}
                                     <div class="error-state">
                                         <span class="material-icons">warning</span>
-                                        <span>No tags available</span>
+                                        <span>No versions available</span>
                                     </div>
                                 {:else}
                                     <select disabled class="disabled-select">
-                                        <option>Select an image first</option>
+                                        <option>Select an environment first</option>
                                     </select>
                                 {/if}
                             </div>
@@ -1329,7 +1329,7 @@
                                 >.
                             {:else}
                                 Leave empty to use the worker's own {ROOT_DISK_GB}
-                                GB disk, which the analysis image shares. You may
+                                GB disk, which the analysis software shares. You may
                                 ask for up to {volumeCeiling} GB, rounded up to
                                 the nearest {volumeQuota?.granularity_gb} GB, and
                                 it is wiped when the run finishes.
@@ -1686,7 +1686,7 @@
     }
 
     /* The label plus the selected image's software badges. Held to the
-       label's own height so the Image Tag column beside it stays level. */
+       label's own height so the Version column beside it stays level. */
     .label-row {
         display: flex;
         align-items: center;

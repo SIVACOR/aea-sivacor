@@ -259,7 +259,7 @@ async function phaseRun() {
         await page.waitForFunction(() => /Job ID/i.test(document.body.innerText), null, { timeout: 120000 });
         // Running, with live logs open.
         await page.waitForTimeout(6000);
-        const logsToggle = page.locator('button, summary', { hasText: /live container logs/i }).first();
+        const logsToggle = page.locator('button, summary', { hasText: /live output/i }).first();
         if (await logsToggle.count()) {
             await logsToggle.click().catch(() => {});
             await page.waitForTimeout(2500);
