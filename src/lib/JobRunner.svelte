@@ -1686,13 +1686,21 @@
     }
 
     /* The label plus the selected image's software badges. Held to the
-       label's own height so the Version column beside it stays level. */
+       label's own height so the Version column beside it stays level: the
+       label's font size makes 1lh one line of the label, and the label's
+       app.css bottom margin moves out to the row, where a bare label has it. */
     .label-row {
         display: flex;
         align-items: center;
         gap: 6px;
         min-width: 0;
-        height: 1.25em;
+        font-size: var(--md-font-caption);
+        height: 1lh;
+        margin-bottom: var(--md-spacing-xs);
+    }
+
+    .label-row label {
+        margin-bottom: 0;
     }
 
     .software-badge {
